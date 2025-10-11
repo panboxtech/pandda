@@ -313,4 +313,111 @@ input:checked + .slider:before {
     .cliente-actions {
         margin-top: 10px;
     }
+
+    /* ... (todos os estilos anteriores) ... */
+
+/* ======================== CLIENTE ITEM ATUALIZADO ======================== */
+.cliente-item {
+    background: white;
+    margin-bottom: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+}
+
+.cliente-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+}
+
+.cliente-expand-area {
+    text-align: center;
+    padding: 5px;
+    cursor: pointer;
+    background-color: #f0f0f0;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+.cliente-details.expanded + .cliente-expand-area {
+     border-radius: 0; /* Remove o raio quando expandido */
+}
+
+
+.cliente-details {
+    padding: 20px;
+    border-top: 1px solid var(--border-color);
+    display: none; /* Inicia escondido */
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.cliente-details.expanded {
+    display: grid; /* Mostra quando tem a classe expanded */
+}
+
+
+/* ======================== ESTILOS DOS MODAIS ======================== */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-content h3 {
+    margin-top: 0;
+    margin-bottom: 25px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    box-sizing: border-box; /* Garante que padding não afete a largura */
+}
+
+.modal-actions {
+    margin-top: 25px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+/* ======================== ESTILOS PARA MODO DE EDIÇÃO ======================== */
+.generic-list-item .item-content input {
+    width: 95%;
+    padding: 8px;
+    border: 1px solid var(--primary-color);
+    border-radius: 4px;
+}
 }
