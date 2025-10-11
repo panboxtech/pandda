@@ -10,83 +10,15 @@
 <body>
 
     <div id="login-page" class="login-container">
-        <div class="login-box">
-            <img src="https://via.placeholder.com/150" alt="Logo Pandda" class="login-logo">
-            <h2>Login</h2>
-            <form id="login-form">
-                <div class="input-group">
-                    <label for="username">Usuário</label>
-                    <input type="text" id="username" required>
-                </div>
-                <div class="input-group">
-                    <label for="password">Senha</label>
-                    <div class="password-wrapper">
-                        <input type="password" id="password" required>
-                        <i class="fas fa-eye" id="togglePassword"></i>
-                    </div>
-                </div>
-                <button type="submit" class="btn">Entrar</button>
-            </form>
         </div>
-    </div>
 
     <div id="dashboard-page" class="dashboard-container" style="display: none;">
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <img src="https://via.placeholder.com/150" alt="Logo Pandda" class="sidebar-logo">
-                <h3>Projeto Pandda</h3>
-            </div>
-            <nav>
-                <ul>
-                    <li><a href="#" class="nav-link active" data-view="clientes"><i class="fas fa-users"></i> Clientes</a></li>
-                    <li><a href="#" class="nav-link" data-view="planos"><i class="fas fa-box"></i> Planos</a></li>
-                    <li><a href="#" class="nav-link" data-view="servidores"><i class="fas fa-server"></i> Servidores</a></li>
-                </ul>
-            </nav>
-        </aside>
-
         <main class="main-content">
             <section id="clientes-view" class="view">
-                <header>
+                 <header>
                     <h2>Dashboard de Clientes</h2>
                 </header>
-
-                <div class="cards-container">
-                    <div class="card">
-                        <h4>Total de Clientes</h4>
-                        <p id="total-clientes">0</p>
-                    </div>
-                    <div class="card">
-                        <h4>Clientes Ativos</h4>
-                        <p id="clientes-ativos">0</p>
-                    </div>
-                    <div class="card">
-                        <h4>Vencendo (Próx. 7 dias)</h4>
-                        <p id="clientes-vencendo">0</p>
-                    </div>
-                    <div class="card">
-                        <h4>Vencidos (-30 dias)</h4>
-                        <p id="clientes-vencidos-recentemente">0</p>
-                    </div>
-                    <div class="card">
-                        <h4>Vencidos (+30 dias)</h4>
-                        <p id="clientes-vencidos-antigos">0</p>
-                    </div>
-                </div>
-
-                <div class="actions-bar">
-                    <input type="search" id="search-clientes" placeholder="Pesquisar por nome, usuário ou WhatsApp...">
-                    <div class="toggle-container">
-                        <label for="toggle-notificados">Apenas não Notificados</label>
-                        <label class="switch">
-                            <input type="checkbox" id="toggle-notificados">
-                            <span class="slider round"></span>
-                        </label>
-                    </div>
-                    <button class="btn btn-primary" id="add-cliente-btn">Adicionar Cliente</button>
-                </div>
-
-                <div id="clientes-list">
+                 <div id="clientes-list">
                     </div>
             </section>
 
@@ -108,6 +40,76 @@
                     </div>
             </section>
         </main>
+    </div>
+
+    <div id="plano-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3 id="plano-modal-title">Adicionar Novo Plano</h3>
+            <form id="plano-form">
+                <input type="hidden" id="plano-id">
+                <div class="form-group">
+                    <label for="plano-nome">Nome</label>
+                    <input type="text" id="plano-nome" required>
+                </div>
+                <div class="form-group">
+                    <label for="plano-pontos">Pontos</label>
+                    <input type="number" id="plano-pontos" required>
+                </div>
+                <div class="form-group">
+                    <label for="plano-valor">Valor (R$)</label>
+                    <input type="number" step="0.01" id="plano-valor" required>
+                </div>
+                <div class="form-group">
+                    <label for="plano-validade">Validade (meses)</label>
+                    <input type="number" id="plano-validade" required>
+                </div>
+                <div class="form-group">
+                    <label for="plano-linkCartao">Link Cartão</label>
+                    <input type="url" id="plano-linkCartao">
+                </div>
+                 <div class="form-group">
+                    <label for="plano-chavePIX">Chave PIX</label>
+                    <input type="text" id="plano-chavePIX">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancel-plano-btn">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="servidor-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3 id="servidor-modal-title">Adicionar Novo Servidor</h3>
+            <form id="servidor-form">
+                <input type="hidden" id="servidor-id">
+                <div class="form-group">
+                    <label for="servidor-nome">Nome</label>
+                    <input type="text" id="servidor-nome" required>
+                </div>
+                <div class="form-group">
+                    <label for="servidor-url1">URL 1</label>
+                    <input type="url" id="servidor-url1" required>
+                </div>
+                <div class="form-group">
+                    <label for="servidor-url2">URL 2</label>
+                    <input type="url" id="servidor-url2">
+                </div>
+                <div class="form-group">
+                    <label for="servidor-app1">App 1</label>
+                    <input type="text" id="servidor-app1">
+                </div>
+                <div class="form-group">
+                    <label for="servidor-app2">App 2</label>
+                    <input type="text" id="servidor-app2">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancel-servidor-btn">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <script src="script.js"></script>
