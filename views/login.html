@@ -1,0 +1,28 @@
+<section class="login-view">
+  <div class="login-box">
+    <img class="logo" alt="PANDDA" src="">
+    <h2>Entrar</h2>
+
+    <form id="loginForm" class="login-form" onsubmit="return false;">
+      <label class="field centered">
+        <span>Usuário</span>
+        <input id="loginUser" name="user" type="text" autocomplete="username">
+      </label>
+
+      <label class="field centered">
+        <span>Senha</span>
+        <div class="password-row">
+          <input id="loginPass" name="pass" type="password" autocomplete="current-password">
+          <button id="toggleEye" type="button" class="icon-btn">👁️</button>
+        </div>
+      </label>
+
+      <div class="login-actions">
+        <button id="btnLogin" class="primary">Entrar</button>
+        <p class="muted">Protótipo: qualquer credencial funciona</p>
+      </div>
+    </form>
+  </div>
+
+  <script src="../js/login.js"></script>
+</section>
