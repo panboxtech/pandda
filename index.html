@@ -8,12 +8,21 @@
 </head>
 <body>
   <!--
-    Projeto Pandda - Protótipo completo em mock
+    Projeto Pandda - Protótipo completo em mock (atualizado)
     - Arquivo único de interface (index.html)
-    - CSS: styles.css (na raiz)
-    - JS: app.js (na raiz)
-    - Supabase: configurações comentadas no app.js para fácil substituição posterior
+    - CSS: styles.css (na raiz) — atualizado para sidebar responsiva
+    - JS: app.js (na raiz) — atualizado para toggle sidebar e novo botão de expandir cliente
   -->
+
+  <!-- ============================
+       BARRA SUPERIOR (mobile / toggle)
+       - botão para esconder/exibir sidebar
+       ============================ -->
+  <header id="topbar">
+    <button id="sidebarToggle" class="icon-btn" aria-label="Toggle menu">☰</button>
+    <div class="topbar-title">PANDDA — Protótipo</div>
+    <div class="topbar-space"></div>
+  </header>
 
   <!-- ============================
        PAGINA DE LOGIN
@@ -50,7 +59,7 @@
        ============================ -->
   <div id="app" class="view">
     <!-- LATERAL / MENU -->
-    <aside id="sidebar">
+    <aside id="sidebar" class="">
       <div class="sidebar-top">
         <div class="logo-mini">PANDDA</div>
         <nav>
@@ -84,9 +93,7 @@
         </header>
 
         <!-- CARDS RESUMO -->
-        <div id="summaryCards" class="cards-grid" aria-hidden="false">
-          <!-- Cards serão gerados via JS -->
-        </div>
+        <div id="summaryCards" class="cards-grid" aria-hidden="false"></div>
 
         <!-- LISTA DE CLIENTES -->
         <div id="clientsList" class="list"></div>
@@ -132,47 +139,39 @@
     </div>
   </div>
 
+  <!-- TEMPLATES (mantidos) -->
   <template id="clientFormTpl">
     <form id="clientForm" class="form">
       <h2 id="clientFormTitle">Novo Cliente</h2>
-
       <div class="two-col">
         <label class="field"><span>Nome</span><input name="nome" required></label>
         <label class="field"><span>WhatsApp</span><input name="whatsapp"></label>
       </div>
-
       <div class="two-col">
         <label class="field"><span>E‑mail</span><input name="email" type="email"></label>
         <label class="field"><span>Data de criação</span><input name="dataCriacao" type="date"></label>
       </div>
-
       <div class="two-col">
         <label class="field"><span>Data de vencimento</span><input name="dataVencimento" type="date"></label>
         <label class="field"><span>Plano</span><select name="planoId"></select></label>
       </div>
-
       <div class="two-col">
         <label class="field"><span>Servidor 1</span><select name="servidor1"></select></label>
         <label class="field"><span>Servidor 2</span><select name="servidor2"></select></label>
       </div>
-
       <div class="two-col">
         <label class="field"><span>Usuário 1</span><input name="usuario1"></label>
         <label class="field"><span>Senha 1</span><input name="senha1"></label>
       </div>
-
       <div class="two-col">
         <label class="field"><span>Usuário 2</span><input name="usuario2"></label>
         <label class="field"><span>Senha 2</span><input name="senha2"></label>
       </div>
-
       <label class="field"><span>Observações</span><textarea name="observacoes"></textarea></label>
-
       <div class="two-col">
         <label class="field"><span>Código Indicação</span><input name="codigoIndicacao"></label>
         <label class="field"><span>Nº Renovações</span><input name="numeroRenovacoes" type="number" min="0"></label>
       </div>
-
       <div class="form-actions">
         <button type="button" id="cancelClient" class="secondary">Cancelar</button>
         <button type="submit" class="primary">Salvar</button>
@@ -183,7 +182,6 @@
   <template id="planFormTpl">
     <form id="planForm" class="form">
       <h2 id="planFormTitle">Novo Plano</h2>
-
       <label class="field"><span>Nome</span><input name="nome" required></label>
       <div class="two-col">
         <label class="field"><span>Pontos</span><input name="pontos" type="number" min="0"></label>
@@ -194,7 +192,6 @@
         <label class="field"><span>Link Cartão</span><input name="linkCartao"></label>
       </div>
       <label class="field"><span>Chave PIX</span><input name="chavePIX"></label>
-
       <div class="form-actions">
         <button type="button" id="cancelPlan" class="secondary">Cancelar</button>
         <button type="submit" class="primary">Salvar</button>
@@ -205,7 +202,6 @@
   <template id="serverFormTpl">
     <form id="serverForm" class="form">
       <h2 id="serverFormTitle">Novo Servidor</h2>
-
       <label class="field"><span>Nome</span><input name="nome" required></label>
       <div class="two-col">
         <label class="field"><span>URL1</span><input name="url1"></label>
@@ -215,7 +211,6 @@
         <label class="field"><span>App1</span><input name="app1"></label>
         <label class="field"><span>App2</span><input name="app2"></label>
       </div>
-
       <div class="form-actions">
         <button type="button" id="cancelServer" class="secondary">Cancelar</button>
         <button type="submit" class="primary">Salvar</button>
