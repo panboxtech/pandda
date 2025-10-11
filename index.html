@@ -1,117 +1,233 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Projeto Pandda - Gerenciador</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pandda — Protótipo</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <!--
+    Projeto Pandda
+    - Arquivo único de interface (index.html)
+    - CSS: styles.css (na raiz)
+    - JS: app.js (na raiz)
+    - Supabase: configurações comentadas no app.js para fácil substituição
+  -->
 
-    <div id="login-page" class="login-container">
+  <!-- ============================
+       PAGINA DE LOGIN
+       ============================ -->
+  <main id="loginView" class="view active">
+    <div class="login-box">
+      <img src="data:image/svg+xml;utf8,
+        <svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'>
+          <rect rx='20' width='100%' height='100%' fill='%23005a9c' />
+          <text x='50%' y='54%' font-size='38' fill='white' text-anchor='middle' font-family='Arial' dominant-baseline='middle'>PANDDA</text>
+        </svg>" alt="logo" class="logo">
+      <h2>Entrar</h2>
+
+      <label class="field">
+        <span>Usuário</span>
+        <input id="loginUser" type="text" autocomplete="username" />
+      </label>
+
+      <label class="field">
+        <span>Senha</span>
+        <div class="password-row">
+          <input id="loginPass" type="password" autocomplete="current-password" />
+          <button id="toggleEye" class="icon-btn" title="Revelar senha" aria-label="Revelar senha">👁️</button>
+        </div>
+      </label>
+
+      <button id="btnLogin" class="primary">Entrar</button>
+      <p class="muted">Use qualquer usuário/senha no protótipo mock para entrar</p>
+    </div>
+  </main>
+
+  <!-- ============================
+       DASHBOARD (PRINCIPAL)
+       ============================ -->
+  <div id="app" class="view">
+    <!-- LATERAL / MENU -->
+    <aside id="sidebar">
+      <div class="sidebar-top">
+        <div class="logo-mini">PANDDA</div>
+        <nav>
+          <button class="nav-btn active" data-view="clientesView">Clientes</button>
+          <button class="nav-btn" data-view="planosView">Planos</button>
+          <button class="nav-btn" data-view="servidoresView">Servidores</button>
+        </nav>
+      </div>
+      <div class="sidebar-bottom">
+        <small class="muted">Protótipo estático / mock</small>
+        <button id="logoutBtn" class="link-like">Sair</button>
+      </div>
+    </aside>
+
+    <!-- CONTEÚDO -->
+    <section id="content">
+      <!-- ============================
+           VIEW CLIENTES
+           ============================ -->
+      <section id="clientesView" class="panel active">
+        <header class="panel-header">
+          <h1>Clientes</h1>
+          <div class="header-actions">
+            <input id="searchInput" placeholder="Pesquisar por nome, usuário, ou WhatsApp" />
+            <label class="toggle">
+              <input id="onlyNotifiedToggle" type="checkbox" />
+              <span>Mostrar apenas Não Notificados</span>
+            </label>
+            <button id="btnNewClient" class="primary">Novo Cliente</button>
+          </div>
+        </header>
+
+        <!-- CARDS RESUMO -->
+        <div id="summaryCards" class="cards-grid" aria-hidden="false">
+          <!-- Cards serão gerados via JS -->
         </div>
 
-    <div id="dashboard-page" class="dashboard-container" style="display: none;">
-        <main class="main-content">
-            <section id="clientes-view" class="view">
-                 <header>
-                    <h2>Dashboard de Clientes</h2>
-                </header>
-                 <div id="clientes-list">
-                    </div>
-            </section>
+        <!-- LISTA DE CLIENTES -->
+        <div id="clientsList" class="list"></div>
+      </section>
 
-            <section id="planos-view" class="view" style="display: none;">
-                <header>
-                    <h2>Gerenciamento de Planos</h2>
-                    <button class="btn btn-primary" id="add-plano-btn">Adicionar Plano</button>
-                </header>
-                <div id="planos-list">
-                    </div>
-            </section>
+      <!-- ============================
+           VIEW PLANOS
+           ============================ -->
+      <section id="planosView" class="panel">
+        <header class="panel-header">
+          <h1>Planos</h1>
+          <div class="header-actions">
+            <button id="btnNewPlan" class="primary">Novo Plano</button>
+          </div>
+        </header>
 
-            <section id="servidores-view" class="view" style="display: none;">
-                 <header>
-                    <h2>Gerenciamento de Servidores</h2>
-                    <button class="btn btn-primary" id="add-servidor-btn">Adicionar Servidor</button>
-                </header>
-                <div id="servidores-list">
-                    </div>
-            </section>
-        </main>
+        <div id="plansList" class="list"></div>
+      </section>
+
+      <!-- ============================
+           VIEW SERVIDORES
+           ============================ -->
+      <section id="servidoresView" class="panel">
+        <header class="panel-header">
+          <h1>Servidores</h1>
+          <div class="header-actions">
+            <button id="btnNewServer" class="primary">Novo Servidor</button>
+          </div>
+        </header>
+
+        <div id="serversList" class="list"></div>
+      </section>
+    </section>
+  </div>
+
+  <!-- ============================
+       MODAIS, FORMULÁRIOS E COMPONENTES GLOBAIS
+       - deixei estes blocos fora das views principais para facilitar reutilização
+       ============================ -->
+
+  <!-- Modal genérico -->
+  <div id="modal" class="modal hidden" role="dialog" aria-hidden="true">
+    <div class="modal-panel">
+      <button id="modalClose" class="close">✕</button>
+      <div id="modalContent"></div>
     </div>
+  </div>
 
-    <div id="plano-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
-            <h3 id="plano-modal-title">Adicionar Novo Plano</h3>
-            <form id="plano-form">
-                <input type="hidden" id="plano-id">
-                <div class="form-group">
-                    <label for="plano-nome">Nome</label>
-                    <input type="text" id="plano-nome" required>
-                </div>
-                <div class="form-group">
-                    <label for="plano-pontos">Pontos</label>
-                    <input type="number" id="plano-pontos" required>
-                </div>
-                <div class="form-group">
-                    <label for="plano-valor">Valor (R$)</label>
-                    <input type="number" step="0.01" id="plano-valor" required>
-                </div>
-                <div class="form-group">
-                    <label for="plano-validade">Validade (meses)</label>
-                    <input type="number" id="plano-validade" required>
-                </div>
-                <div class="form-group">
-                    <label for="plano-linkCartao">Link Cartão</label>
-                    <input type="url" id="plano-linkCartao">
-                </div>
-                 <div class="form-group">
-                    <label for="plano-chavePIX">Chave PIX</label>
-                    <input type="text" id="plano-chavePIX">
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="cancel-plano-btn">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Salvar</button>
-                </div>
-            </form>
-        </div>
-    </div>
+  <!-- Templates e formulários -->
+  <template id="clientFormTpl">
+    <form id="clientForm" class="form">
+      <h2 id="clientFormTitle">Novo Cliente</h2>
 
-    <div id="servidor-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
-            <h3 id="servidor-modal-title">Adicionar Novo Servidor</h3>
-            <form id="servidor-form">
-                <input type="hidden" id="servidor-id">
-                <div class="form-group">
-                    <label for="servidor-nome">Nome</label>
-                    <input type="text" id="servidor-nome" required>
-                </div>
-                <div class="form-group">
-                    <label for="servidor-url1">URL 1</label>
-                    <input type="url" id="servidor-url1" required>
-                </div>
-                <div class="form-group">
-                    <label for="servidor-url2">URL 2</label>
-                    <input type="url" id="servidor-url2">
-                </div>
-                <div class="form-group">
-                    <label for="servidor-app1">App 1</label>
-                    <input type="text" id="servidor-app1">
-                </div>
-                <div class="form-group">
-                    <label for="servidor-app2">App 2</label>
-                    <input type="text" id="servidor-app2">
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="cancel-servidor-btn">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Salvar</button>
-                </div>
-            </form>
-        </div>
-    </div>
+      <div class="two-col">
+        <label class="field"><span>Nome</span><input name="nome" required></label>
+        <label class="field"><span>WhatsApp</span><input name="whatsapp"></label>
+      </div>
 
-    <script src="script.js"></script>
+      <div class="two-col">
+        <label class="field"><span>E‑mail</span><input name="email" type="email"></label>
+        <label class="field"><span>Data de criação</span><input name="dataCriacao" type="date"></label>
+      </div>
+
+      <div class="two-col">
+        <label class="field"><span>Data de vencimento</span><input name="dataVencimento" type="date"></label>
+        <label class="field"><span>Plano</span><select name="planoId"></select></label>
+      </div>
+
+      <div class="two-col">
+        <label class="field"><span>Servidor 1</span><select name="servidor1"></select></label>
+        <label class="field"><span>Servidor 2</span><select name="servidor2"></select></label>
+      </div>
+
+      <div class="two-col">
+        <label class="field"><span>Usuário 1</span><input name="usuario1"></label>
+        <label class="field"><span>Senha 1</span><input name="senha1"></label>
+      </div>
+
+      <div class="two-col">
+        <label class="field"><span>Usuário 2</span><input name="usuario2"></label>
+        <label class="field"><span>Senha 2</span><input name="senha2"></label>
+      </div>
+
+      <label class="field"><span>Observações</span><textarea name="observacoes"></textarea></label>
+
+      <div class="two-col">
+        <label class="field"><span>Código Indicação</span><input name="codigoIndicacao"></label>
+        <label class="field"><span>Nº Renovações</span><input name="numeroRenovacoes" type="number" min="0"></label>
+      </div>
+
+      <div class="form-actions">
+        <button type="button" id="cancelClient" class="secondary">Cancelar</button>
+        <button type="submit" class="primary">Salvar</button>
+      </div>
+    </form>
+  </template>
+
+  <template id="planFormTpl">
+    <form id="planForm" class="form">
+      <h2 id="planFormTitle">Novo Plano</h2>
+
+      <label class="field"><span>Nome</span><input name="nome" required></label>
+      <div class="two-col">
+        <label class="field"><span>Pontos</span><input name="pontos" type="number" min="0"></label>
+        <label class="field"><span>Valor</span><input name="valor" type="number" step="0.01"></label>
+      </div>
+      <div class="two-col">
+        <label class="field"><span>Validade (meses)</span><input name="validade" type="number" min="1" required></label>
+        <label class="field"><span>Link Cartão</span><input name="linkCartao"></label>
+      </div>
+      <label class="field"><span>Chave PIX</span><input name="chavePIX"></label>
+
+      <div class="form-actions">
+        <button type="button" id="cancelPlan" class="secondary">Cancelar</button>
+        <button type="submit" class="primary">Salvar</button>
+      </div>
+    </form>
+  </template>
+
+  <template id="serverFormTpl">
+    <form id="serverForm" class="form">
+      <h2 id="serverFormTitle">Novo Servidor</h2>
+
+      <label class="field"><span>Nome</span><input name="nome" required></label>
+      <div class="two-col">
+        <label class="field"><span>URL1</span><input name="url1"></label>
+        <label class="field"><span>URL2</span><input name="url2"></label>
+      </div>
+      <div class="two-col">
+        <label class="field"><span>App1</span><input name="app1"></label>
+        <label class="field"><span>App2</span><input name="app2"></label>
+      </div>
+
+      <div class="form-actions">
+        <button type="button" id="cancelServer" class="secondary">Cancelar</button>
+        <button type="submit" class="primary">Salvar</button>
+      </div>
+    </form>
+  </template>
+
+  <!-- Arquivos JS -->
+  <script src="app.js"></script>
 </body>
 </html>
