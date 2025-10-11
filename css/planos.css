@@ -1,0 +1,3 @@
+/* planos specific */
+.list-wrapper{max-height:calc(100vh - 160px);overflow:auto}
+.item-row{background:#fff;padding:10px;border-radius:8px;display:flex;justify-content:space-between;align-items:center}
