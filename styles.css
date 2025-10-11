@@ -1,0 +1,106 @@
+:root{
+  --bg:#f4f6f9; --card:#fff; --accent:#005a9c; --muted:#666; --danger:#d9534f;
+  --radius:10px; --gap:12px; --max:1100px;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:#222; -webkit-font-smoothing:antialiased;
+}
+
+/* Exibição exclusiva de cada view (login / app) */
+.view { display: none; }
+.view.active { display: block; }
+
+/* Garantia de layout app */
+#app { display: none; }
+#app.active { display: flex; min-height:100vh; }
+
+/* Reinforce panels inside app */
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* LOGIN */
+.login-box{
+  max-width:420px; margin:6vh auto; padding:28px; background:var(--card); border-radius:12px;
+  box-shadow:0 8px 30px rgba(20,30,50,0.08); text-align:center;
+}
+.login-box .logo{width:120px;height:120px;border-radius:8px;display:block;margin:0 auto 10px}
+.login-box h2{margin:6px 0 18px}
+.field{display:block;text-align:left;margin:10px 0}
+.field span{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+input,select,textarea{width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:8px;font-size:15px}
+textarea{min-height:90px;resize:vertical}
+.password-row{display:flex;gap:8px}
+.icon-btn{border:0;background:transparent;font-size:18px;cursor:pointer;padding:6px}
+
+/* APP LAYOUT */
+#app{flex-direction:row}
+#sidebar{
+  width:240px;background:#0f1724;color:#fff;padding:18px;display:flex;flex-direction:column;justify-content:space-between;
+  gap:10px;
+}
+.logo-mini{font-weight:700;font-size:18px;margin-bottom:8px}
+nav{display:flex;flex-direction:column;gap:8px}
+.nav-btn{background:transparent;color:#cfd8e3;border:0;padding:10px 12px;text-align:left;border-radius:8px;cursor:pointer}
+.nav-btn.active{background:#0b304f;color:#fff}
+.sidebar-bottom{font-size:12px;opacity:0.85}
+.link-like{background:transparent;border:0;color:#89c2ff;cursor:pointer;padding:8px 0}
+
+/* CONTENT */
+#content{flex:1;padding:24px;max-width:calc(var(--max) + 480px);margin:0 auto}
+.panel-header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}
+.panel-header h1{margin:0}
+.header-actions{display:flex;gap:10px;align-items:center}
+.header-actions input{min-width:240px}
+.primary{background:var(--accent);color:#fff;border:0;padding:10px 14px;border-radius:8px;cursor:pointer}
+.secondary{background:#eee;border:0;padding:8px 12px;border-radius:8px;cursor:pointer}
+.muted{color:var(--muted);font-size:13px}
+
+/* CARDS RESUMO */
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:18px}
+.card{background:var(--card);padding:12px;border-radius:10px;box-shadow:0 6px 20px rgba(30,40,60,0.04);cursor:pointer}
+.card h3{margin:0;font-size:15px}
+.card p{margin:6px 0 0;font-weight:700;font-size:20px}
+
+/* LISTA */
+.list{display:flex;flex-direction:column;gap:10px}
+.client-row{background:var(--card);padding:12px;border-radius:10px;display:flex;flex-direction:column;gap:8px;border-left:4px solid transparent}
+.client-summary{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.client-left{display:flex;align-items:center;gap:12px}
+.client-name{font-weight:700}
+.whatsapp{color:var(--muted);font-size:13px;display:flex;align-items:center;gap:8px}
+.badge{font-size:12px;padding:4px 8px;border-radius:999px;background:#eef5ff;color:var(--accent)}
+.actions{display:flex;gap:8px;align-items:center}
+.small-btn{padding:8px;border-radius:8px;border:0;background:#f3f4f6;cursor:pointer}
+.copy-btn{background:#e9f7ef;color:#0b6623}
+.notify-btn{background:#fff7e6}
+.renew-btn{background:#eef2ff}
+
+/* EXPANDIDO */
+.client-details{display:none;background:#fafafa;padding:10px;border-radius:8px;border:1px dashed #eee}
+.client-row.expanded .client-details{display:block}
+
+/* LISTAGEM SIMPLES */
+.item-row{background:var(--card);padding:12px;border-radius:10px;display:flex;justify-content:space-between;align-items:center}
+.item-col{display:flex;flex-direction:column}
+
+/* FORM */
+.form{display:flex;flex-direction:column;gap:10px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
+
+/* MODAL */
+.modal{position:fixed;inset:0;background:rgba(8,12,20,0.4);display:flex;align-items:center;justify-content:center;padding:20px}
+.modal.hidden{display:none}
+.modal-panel{background:var(--card);padding:18px;border-radius:12px;max-width:720px;width:100%;position:relative}
+.close{position:absolute;right:10px;top:8px;border:0;background:transparent;font-size:18px;cursor:pointer}
+
+/* RESPONSIVO */
+@media (max-width:880px){
+  #sidebar{display:none}
+  #content{padding:12px}
+  .password-row{flex-direction:row}
+}
