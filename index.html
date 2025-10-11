@@ -8,11 +8,11 @@
 </head>
 <body>
   <!--
-    Projeto Pandda
+    Projeto Pandda - Protótipo completo em mock
     - Arquivo único de interface (index.html)
     - CSS: styles.css (na raiz)
     - JS: app.js (na raiz)
-    - Supabase: configurações comentadas no app.js para fácil substituição
+    - Supabase: configurações comentadas no app.js para fácil substituição posterior
   -->
 
   <!-- ============================
@@ -124,10 +124,7 @@
 
   <!-- ============================
        MODAIS, FORMULÁRIOS E COMPONENTES GLOBAIS
-       - deixei estes blocos fora das views principais para facilitar reutilização
        ============================ -->
-
-  <!-- Modal genérico -->
   <div id="modal" class="modal hidden" role="dialog" aria-hidden="true">
     <div class="modal-panel">
       <button id="modalClose" class="close">✕</button>
@@ -135,7 +132,6 @@
     </div>
   </div>
 
-  <!-- Templates e formulários -->
   <template id="clientFormTpl">
     <form id="clientForm" class="form">
       <h2 id="clientFormTitle">Novo Cliente</h2>
@@ -227,7 +223,6 @@
     </form>
   </template>
 
-  <!-- Arquivos JS -->
   <script src="app.js"></script>
 </body>
 </html>
