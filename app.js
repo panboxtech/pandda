@@ -34,21 +34,18 @@ const uid = () => Math.random().toString(36).slice(2,9);
 const STORAGE_KEY = 'pandda_mock_v1';
 
 function defaultData(){
-  // 3 planos
   const planos = [
     { id: 'p1', nome: 'Básico', pontos: 10, valor: 29.90, validade: 1, linkCartao: 'https://pagto.example/basico', chavePIX: 'pix-basico' },
     { id: 'p2', nome: 'Pro', pontos: 30, valor: 69.90, validade: 3, linkCartao: 'https://pagto.example/pro', chavePIX: 'pix-pro' },
     { id: 'p3', nome: 'Anual', pontos: 120, valor: 199.90, validade: 12, linkCartao: 'https://pagto.example/anual', chavePIX: 'pix-anual' },
   ];
 
-  // 3 servidores
   const servidores = [
     { id: 's1', nome: 'Servidor Alpha', url1: 'https://alpha.example', url2: '', app1: 'app-alpha-1', app2: '' },
     { id: 's2', nome: 'Servidor Beta', url1: 'https://beta.example', url2: '', app1: 'app-beta-1', app2: 'app-beta-2' },
     { id: 's3', nome: 'Servidor Gamma', url1: 'https://gamma.example', url2: 'https://gamma2.example', app1: '', app2: '' },
   ];
 
-  // 10 clientes: alguns ativos, alguns vencidos, alguns próximos ao vencimento
   const baseDate = new Date();
   const clients = [
     { id:'c1', nome:'Ana Silva', whatsapp:'+5591988887777', email:'ana@example.com', dataCriacao: fmtDate(addDays(fmtDate(baseDate), -120)), dataVencimento: fmtDate(addMonths(fmtDate(baseDate), 1)), planoId:'p1', servidor1:'s1', servidor2:'', usuario1:'ana1', senha1:'pass', usuario2:'', senha2:'', statusNotificacao:true, observacoes:'Cliente VIP', codigoIndicacao:'X1', numeroRenovacoes:0, bloqueado:false },
@@ -109,7 +106,7 @@ let DB = loadState();
    Mapeamento DOM e inicialização
    ------------------------- */
 const state = {
-  filter: { text: '', onlyNotified:false, dateRange: null }, // dateRange will be set when clicking summary card
+  filter: { text: '', onlyNotified:false, dateRange: null },
 };
 
 function init(){
@@ -121,26 +118,47 @@ function init(){
 
 /* -------------------------
    AUTH (simples para protótipo)
+   - mantém loginView e app mutuamente exclusivos
    ------------------------- */
 function bindAuth(){
   const loginView = qs('#loginView');
   const appView = qs('#app');
   const btnLogin = qs('#btnLogin');
   const toggleEye = qs('#toggleEye');
+
+  // garantir estado inicial consistente
+  if (loginView.classList.contains('active')) {
+    loginView.classList.add('active');
+    appView.classList.remove('active');
+    qs('#app').classList.remove('active');
+  } else {
+    appView.classList.add('active');
+    qs('#app').classList.add('active');
+    loginView.classList.remove('active');
+  }
+
   toggleEye.addEventListener('click', () => {
     const p = qs('#loginPass');
     p.type = p.type === 'password' ? 'text' : 'password';
   });
+
   btnLogin.addEventListener('click', () => {
     // protótipo: qualquer credencial acessa
     loginView.classList.remove('active');
     appView.classList.add('active');
-    // abrir página clientes por padrão
+    qs('#app').classList.add('active');
+
+    // abrir página clientes por padrão e garantir que apenas ela seja visível
     showView('clientesView');
   });
 
   qs('#logoutBtn').addEventListener('click', () => {
-    document.location.reload();
+    // voltar para login: esconder app e mostrar login
+    qs('#app').classList.remove('active');
+    qs('#loginView').classList.add('active');
+    // limpar seleção de painel
+    qsa('.panel').forEach(p => p.classList.remove('active'));
+    qs('#clientesView').classList.remove('active');
   });
 }
 
@@ -160,9 +178,17 @@ function bindNav(){
 
 function showView(id){
   qsa('.panel').forEach(p => p.classList.remove('active'));
-  qs(`#${id}`).classList.add('active');
-  // focus for accessibility
-  qs(`#${id}`).scrollIntoView({behavior:'smooth'});
+  const target = qs(`#${id}`);
+  if (target) target.classList.add('active');
+
+  qsa('.nav-btn').forEach(b => {
+    if (b.dataset.view === id) b.classList.add('active');
+    else b.classList.remove('active');
+  });
+
+  target && target.scrollIntoView({behavior:'smooth'});
+  // atualizar listas sempre que trocar de aba
+  renderAll();
 }
 
 /* -------------------------
@@ -177,11 +203,6 @@ function renderAll(){
 
 /* -------------------------
    RESUMO: cards que filtram por vencimento
-   - Clientes ativos
-   - Clientes vencendo (7 dias)
-   - Vencidos <30 dias
-   - Vencidos >30 dias
-   - Total clientes
    ------------------------- */
 function computeClientBuckets(){
   const today = new Date();
@@ -208,6 +229,7 @@ function computeClientBuckets(){
 
 function renderSummaryCards(){
   const container = qs('#summaryCards');
+  if (!container) return;
   container.innerHTML = '';
   const b = computeClientBuckets();
   const cards = [
@@ -233,10 +255,6 @@ function renderSummaryCards(){
    Filtragem a partir dos cards
    ------------------------- */
 function applySummaryFilter(f){
-  const today = new Date();
-  function daysDiff(dateStr){
-    const d = new Date(dateStr); return Math.floor((d - today)/(1000*60*60*24));
-  }
   state.filter.dateRange = f;
   renderClientsList();
 }
@@ -265,14 +283,13 @@ function matchesSummaryFilter(client, filter){
 
 function renderClientsList(){
   const list = qs('#clientsList');
+  if (!list) return;
   list.innerHTML = '';
 
-  // coleta filtros
-  const text = qs('#searchInput').value.trim();
-  const onlyNotified = qs('#onlyNotifiedToggle').checked;
+  const text = qs('#searchInput') ? qs('#searchInput').value.trim() : '';
+  const onlyNotified = qs('#onlyNotifiedToggle') ? qs('#onlyNotifiedToggle').checked : false;
   const dateFilter = state.filter.dateRange;
 
-  // ordenar por data de vencimento asc
   const out = DB.clientes
     .filter(c => matchesSearch(c, text))
     .filter(c => onlyNotified ? c.statusNotificacao === false : true)
@@ -322,7 +339,6 @@ function clientRow(client){
   const details = document.createElement('div'); details.className='client-details';
   details.innerHTML = clientDetailsHtml(client);
 
-  // copiar whatsapp
   wa.querySelector('.copy-btn').addEventListener('click', (e) => {
     navigator.clipboard?.writeText(client.whatsapp || '')?.then(()=> {
       e.target.textContent = '✔';
@@ -330,7 +346,6 @@ function clientRow(client){
     });
   });
 
-  // botão bloquear (em detalhe)
   const blockBtn = details.querySelector('.block-client');
   blockBtn.addEventListener('click', ()=> {
     if (!confirm(`Bloquear cliente ${client.nome}? Isso define bloqueado = true.`)) return;
@@ -345,7 +360,6 @@ function clientRow(client){
 }
 
 function clientDetailsHtml(client){
-  // inclui todos os campos no detalhe
   const plano = DB.planos.find(p=>p.id===client.planoId);
   const servidor1 = DB.servidores.find(s=>s.id===client.servidor1);
   const servidor2 = DB.servidores.find(s=>s.id===client.servidor2);
@@ -370,12 +384,10 @@ function clientDetailsHtml(client){
 
 /* -------------------------
    NOTIFICAR cliente => simulação
-   - seta statusNotificacao true e atualiza UI
    ------------------------- */
 function notifyClient(clientId){
   const c = DB.clientes.find(x=>x.id===clientId);
   if (!c) return;
-  // Simular envio (no protótipo apenas setar o campo)
   c.statusNotificacao = true;
   saveState(DB);
   renderClientsList();
@@ -384,9 +396,6 @@ function notifyClient(clientId){
 
 /* -------------------------
    RENOVAÇÃO
-   - abre modal com seleção de plano (por padrão plano atual)
-   - opção: renovar soma meses da validade do plano na data de vencimento atual
-   - ou escolha manual de data
    ------------------------- */
 function openRenewModal(clientId){
   const client = DB.clientes.find(c=>c.id===clientId);
@@ -407,7 +416,6 @@ function buildRenewForm(client){
       <button type="submit" class="primary">Renovar</button>
     </div>
   `;
-  // preencher select com planos
   const sel = form.querySelector('select[name=planoId]');
   DB.planos.forEach(p => {
     const o = document.createElement('option');
@@ -415,7 +423,6 @@ function buildRenewForm(client){
     if (p.id === client.planoId) o.selected = true;
     sel.appendChild(o);
   });
-  // calcular data por padrão: dataVencimento atual + validade do selecionado
   const dateIn = form.querySelector('input[name=dataVencimento]');
   const selectedPlan = DB.planos.find(p=>p.id===sel.value);
   dateIn.value = addMonths(client.dataVencimento || fmtDate(new Date()), selectedPlan ? selectedPlan.validade : 1);
@@ -430,7 +437,6 @@ function buildRenewForm(client){
     e.preventDefault();
     const planId = sel.value;
     const newDate = dateIn.value;
-    // atualizar cliente
     client.planoId = planId;
     client.dataVencimento = newDate;
     client.numeroRenovacoes = (client.numeroRenovacoes || 0) + 1;
@@ -446,17 +452,14 @@ function buildRenewForm(client){
 
 /* -------------------------
    EDITAR CLIENTE
-   - habilita campos inline (abre modal com o formulário já preenchido)
-   - ao salvar, confirma e grava no mock DB
    ------------------------- */
 function openEditClient(clientId, rowNode){
   const client = DB.clientes.find(c=>c.id===clientId);
   if (!client) return;
-  // abrir modal com formulário
   const tpl = qs('#clientFormTpl').content.cloneNode(true);
   const form = tpl.querySelector('form');
   tpl.querySelector('#clientFormTitle').textContent = `Editar ${client.nome}`;
-  // preencher selects de planos e servidores
+
   const planoSel = form.querySelector('select[name=planoId]');
   DB.planos.forEach(p => { const o = document.createElement('option'); o.value = p.id; o.textContent = p.nome; if (p.id===client.planoId) o.selected=true; planoSel.appendChild(o); });
   const srv1 = form.querySelector('select[name=servidor1]');
@@ -465,7 +468,6 @@ function openEditClient(clientId, rowNode){
   srv1.appendChild(emptyOpt.cloneNode(true)); srv2.appendChild(emptyOpt.cloneNode(true));
   DB.servidores.forEach(s => { const o1=document.createElement('option'); o1.value=s.id; o1.textContent=s.nome; if (s.id===client.servidor1) o1.selected=true; srv1.appendChild(o1); const o2=o1.cloneNode(true); if (s.id===client.servidor2) o2.selected=true; srv2.appendChild(o2); });
 
-  // preencher campos
   const fields = form.elements;
   fields.namedItem('nome').value = client.nome || '';
   fields.namedItem('whatsapp').value = client.whatsapp || '';
@@ -480,13 +482,10 @@ function openEditClient(clientId, rowNode){
   fields.namedItem('codigoIndicacao').value = client.codigoIndicacao || '';
   fields.namedItem('numeroRenovacoes').value = client.numeroRenovacoes || 0;
 
-  // eventos
   form.querySelector('#cancelClient').addEventListener('click', closeModal);
   form.addEventListener('submit', (e)=>{
     e.preventDefault();
-    // confirmar
     if (!confirm('Salvar alterações do cliente?')) return;
-    // atualizar
     client.nome = fields.namedItem('nome').value;
     client.whatsapp = fields.namedItem('whatsapp').value;
     client.email = fields.namedItem('email').value;
@@ -512,14 +511,11 @@ function openEditClient(clientId, rowNode){
 
 /* -------------------------
    CADASTRAR NOVO CLIENTE
-   - abre o formulário de novo cliente
-   - salva e adiciona ao DB
    ------------------------- */
 qs('#btnNewClient').addEventListener('click', ()=> {
   const tpl = qs('#clientFormTpl').content.cloneNode(true);
   const form = tpl.querySelector('form');
   tpl.querySelector('#clientFormTitle').textContent = 'Novo Cliente';
-  // preencher select planos/servidores
   const planoSel = form.querySelector('select[name=planoId]');
   DB.planos.forEach(p => { const o=document.createElement('option'); o.value=p.id; o.textContent=p.nome; planoSel.appendChild(o); });
   const srv1 = form.querySelector('select[name=servidor1]');
@@ -563,10 +559,10 @@ qs('#btnNewClient').addEventListener('click', ()=> {
 
 /* -------------------------
    PLANOS: listagem, criar, editar
-   - Não implementar deletar nem bloquear
    ------------------------- */
 function renderPlansList(){
   const container = qs('#plansList');
+  if (!container) return;
   container.innerHTML = '';
   DB.planos.forEach(p => {
     const row = document.createElement('div'); row.className='item-row';
@@ -602,7 +598,7 @@ qs('#btnNewPlan').addEventListener('click', ()=> {
     saveState(DB);
     closeModal();
     renderPlansList();
-    renderClientsList(); // para atualizar selects
+    renderClientsList();
   });
   openModal(tpl);
 });
@@ -640,10 +636,10 @@ function openEditPlan(planId){
 
 /* -------------------------
    SERVIDORES: listagem, criar, editar
-   - Não permitir deletar nem bloquear
    ------------------------- */
 function renderServersList(){
   const container = qs('#serversList');
+  if (!container) return;
   container.innerHTML = '';
   DB.servidores.forEach(s => {
     const row = document.createElement('div'); row.className='item-row';
@@ -734,16 +730,17 @@ qs('#modal').addEventListener('click', (e)=> { if (e.target === qs('#modal')) cl
    UI: busca toggle e bind
    ------------------------- */
 function bindGlobalUI(){
-  qs('#searchInput').addEventListener('input', ()=> {
+  const search = qs('#searchInput');
+  if (search) search.addEventListener('input', ()=> {
     state.filter.text = qs('#searchInput').value;
     renderClientsList();
   });
-  qs('#onlyNotifiedToggle').addEventListener('change', ()=> {
+  const toggle = qs('#onlyNotifiedToggle');
+  if (toggle) toggle.addEventListener('change', ()=> {
     state.filter.onlyNotified = qs('#onlyNotifiedToggle').checked;
     renderClientsList();
   });
 
-  // fechar modal com esc
   document.addEventListener('keydown', (e)=> {
     if (e.key === 'Escape') closeModal();
   });
