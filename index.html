@@ -3,30 +3,27 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Pandda — Protótipo</title>
+  <title>Pandda — v2</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <!--
-    Pandda — Protótipo (atualizado)
-    - HTML único: index.html
+    Pandda Protótipo — v2
+    - Arquivo único de interface (index.html)
     - CSS: styles.css (na raiz)
     - JS: app.js (na raiz)
-    - Mudanças nesta versão:
-      * Topbar fixa no topo (botão do menu sempre visível em mobile)
-      * Área de conteúdo é responsiva e scrollável (ajusta-se ao tamanho da tela)
-      * Formulários e listagens respeitam largura da tela
+    - Sidebar agora está em template e só é injetada no DOM após login (evita carregamento/visualização na tela de login)
   -->
 
   <!-- TOPBAR FIXA -->
   <header id="topbar">
     <button id="sidebarToggle" class="icon-btn" aria-label="Toggle menu">☰</button>
-    <div class="topbar-title">PANDDA — Protótipo</div>
+    <div class="topbar-title">PANDDA — v2</div>
     <div class="topbar-space"></div>
   </header>
 
   <!-- LOGIN VIEW -->
-  <main id="loginView" class="view active">
+  <main id="loginView" class="view active" aria-hidden="false">
     <div class="login-box">
       <img src="data:image/svg+xml;utf8,
         <svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'>
@@ -35,27 +32,95 @@
         </svg>" alt="logo" class="logo">
       <h2>Entrar</h2>
 
-      <label class="field">
-        <span>Usuário</span>
-        <input id="loginUser" type="text" autocomplete="username" />
-      </label>
+      <form id="loginForm" class="login-form" onsubmit="return false;">
+        <label class="field centered">
+          <span>Usuário</span>
+          <input id="loginUser" type="text" autocomplete="username" />
+        </label>
 
-      <label class="field">
-        <span>Senha</span>
-        <div class="password-row">
-          <input id="loginPass" type="password" autocomplete="current-password" />
-          <button id="toggleEye" class="icon-btn" title="Revelar senha" aria-label="Revelar senha">👁️</button>
+        <label class="field centered">
+          <span>Senha</span>
+          <div class="password-row">
+            <input id="loginPass" type="password" autocomplete="current-password" />
+            <button id="toggleEye" type="button" class="icon-btn" title="Revelar senha" aria-label="Revelar senha">👁️</button>
+          </div>
+        </label>
+
+        <div class="login-actions">
+          <button id="btnLogin" class="primary">Entrar</button>
+          <p class="muted">Use qualquer usuário/senha no protótipo mock para entrar</p>
         </div>
-      </label>
-
-      <button id="btnLogin" class="primary">Entrar</button>
-      <p class="muted">Use qualquer usuário/senha no protótipo mock para entrar</p>
+      </form>
     </div>
   </main>
 
-  <!-- APP VIEW -->
-  <div id="app" class="view">
-    <!-- SIDEBAR -->
+  <!-- APP VIEW (conteúdo principal) -->
+  <div id="app" class="view" aria-hidden="true">
+    <!-- Sidebar será injetada via template no momento do login -->
+
+    <!-- CONTEÚDO -->
+    <section id="content">
+      <!-- CLIENTES -->
+      <section id="clientesView" class="panel active">
+        <header class="panel-header">
+          <div class="header-row">
+            <h1>Clientes</h1>
+            <div class="header-actions">
+              <input id="searchInput" placeholder="Pesquisar por nome, usuário, ou WhatsApp" />
+              <label class="toggle">
+                <input id="onlyNotifiedToggle" type="checkbox" />
+                <span>Mostrar apenas Não Notificados</span>
+              </label>
+              <button id="btnNewClient" class="primary">Novo Cliente</button>
+            </div>
+          </div>
+        </header>
+
+        <div id="summaryAndList" class="panel-body">
+          <div id="summaryCards" class="cards-grid" aria-hidden="false"></div>
+
+          <div id="clientsWrapper" class="list-wrapper">
+            <div id="clientsList" class="list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PLANOS -->
+      <section id="planosView" class="panel">
+        <header class="panel-header">
+          <div class="header-row">
+            <h1>Planos</h1>
+            <div class="header-actions">
+              <button id="btnNewPlan" class="primary">Novo Plano</button>
+            </div>
+          </div>
+        </header>
+
+        <div id="plansWrapper" class="panel-body list-wrapper">
+          <div id="plansList" class="list"></div>
+        </div>
+      </section>
+
+      <!-- SERVIDORES -->
+      <section id="servidoresView" class="panel">
+        <header class="panel-header">
+          <div class="header-row">
+            <h1>Servidores</h1>
+            <div class="header-actions">
+              <button id="btnNewServer" class="primary">Novo Servidor</button>
+            </div>
+          </div>
+        </header>
+
+        <div id="serversWrapper" class="panel-body list-wrapper">
+          <div id="serversList" class="list"></div>
+        </div>
+      </section>
+    </section>
+  </div>
+
+  <!-- SIDEBAR TEMPLATE (não renderizada até o login) -->
+  <template id="sidebarTpl">
     <aside id="sidebar" class="">
       <div class="sidebar-top">
         <div class="logo-mini">PANDDA</div>
@@ -70,63 +135,7 @@
         <button id="logoutBtn" class="link-like">Sair</button>
       </div>
     </aside>
-
-    <!-- CONTEÚDO PRINCIPAL -->
-    <section id="content">
-      <!-- CLIENTES -->
-      <section id="clientesView" class="panel active">
-        <header class="panel-header">
-          <h1>Clientes</h1>
-          <div class="header-actions">
-            <input id="searchInput" placeholder="Pesquisar por nome, usuário, ou WhatsApp" />
-            <label class="toggle">
-              <input id="onlyNotifiedToggle" type="checkbox" />
-              <span>Mostrar apenas Não Notificados</span>
-            </label>
-            <button id="btnNewClient" class="primary">Novo Cliente</button>
-          </div>
-        </header>
-
-        <div id="summaryAndList" class="panel-body">
-          <!-- CARDS RESUMO -->
-          <div id="summaryCards" class="cards-grid" aria-hidden="false"></div>
-
-          <!-- LISTA DE CLIENTES: área com scroll independente -->
-          <div id="clientsWrapper" class="list-wrapper">
-            <div id="clientsList" class="list"></div>
-          </div>
-        </div>
-      </section>
-
-      <!-- PLANOS -->
-      <section id="planosView" class="panel">
-        <header class="panel-header">
-          <h1>Planos</h1>
-          <div class="header-actions">
-            <button id="btnNewPlan" class="primary">Novo Plano</button>
-          </div>
-        </header>
-
-        <div id="plansWrapper" class="panel-body list-wrapper">
-          <div id="plansList" class="list"></div>
-        </div>
-      </section>
-
-      <!-- SERVIDORES -->
-      <section id="servidoresView" class="panel">
-        <header class="panel-header">
-          <h1>Servidores</h1>
-          <div class="header-actions">
-            <button id="btnNewServer" class="primary">Novo Servidor</button>
-          </div>
-        </header>
-
-        <div id="serversWrapper" class="panel-body list-wrapper">
-          <div id="serversList" class="list"></div>
-        </div>
-      </section>
-    </section>
-  </div>
+  </template>
 
   <!-- MODAL -->
   <div id="modal" class="modal hidden" role="dialog" aria-hidden="true">
@@ -136,95 +145,10 @@
     </div>
   </div>
 
-  <!-- TEMPLATES -->
-  <template id="clientFormTpl">
-    <form id="clientForm" class="form">
-      <h2 id="clientFormTitle">Novo Cliente</h2>
-
-      <div class="two-col">
-        <label class="field"><span>Nome</span><input name="nome" required></label>
-        <label class="field"><span>WhatsApp</span><input name="whatsapp"></label>
-      </div>
-
-      <div class="two-col">
-        <label class="field"><span>E‑mail</span><input name="email" type="email"></label>
-        <label class="field"><span>Data de criação</span><input name="dataCriacao" type="date"></label>
-      </div>
-
-      <div class="two-col">
-        <label class="field"><span>Data de vencimento</span><input name="dataVencimento" type="date"></label>
-        <label class="field"><span>Plano</span><select name="planoId"></select></label>
-      </div>
-
-      <div class="two-col">
-        <label class="field"><span>Servidor 1</span><select name="servidor1"></select></label>
-        <label class="field"><span>Servidor 2</span><select name="servidor2"></select></label>
-      </div>
-
-      <div class="two-col">
-        <label class="field"><span>Usuário 1</span><input name="usuario1"></label>
-        <label class="field"><span>Senha 1</span><input name="senha1"></label>
-      </div>
-
-      <div class="two-col">
-        <label class="field"><span>Usuário 2</span><input name="usuario2"></label>
-        <label class="field"><span>Senha 2</span><input name="senha2"></label>
-      </div>
-
-      <label class="field"><span>Observações</span><textarea name="observacoes"></textarea></label>
-
-      <div class="two-col">
-        <label class="field"><span>Código Indicação</span><input name="codigoIndicacao"></label>
-        <label class="field"><span>Nº Renovações</span><input name="numeroRenovacoes" type="number" min="0"></label>
-      </div>
-
-      <div class="form-actions">
-        <button type="button" id="cancelClient" class="secondary">Cancelar</button>
-        <button type="submit" class="primary">Salvar</button>
-      </div>
-    </form>
-  </template>
-
-  <template id="planFormTpl">
-    <form id="planForm" class="form">
-      <h2 id="planFormTitle">Novo Plano</h2>
-      <label class="field"><span>Nome</span><input name="nome" required></label>
-      <div class="two-col">
-        <label class="field"><span>Pontos</span><input name="pontos" type="number" min="0"></label>
-        <label class="field"><span>Valor</span><input name="valor" type="number" step="0.01"></label>
-      </div>
-      <div class="two-col">
-        <label class="field"><span>Validade (meses)</span><input name="validade" type="number" min="1" required></label>
-        <label class="field"><span>Link Cartão</span><input name="linkCartao"></label>
-      </div>
-      <label class="field"><span>Chave PIX</span><input name="chavePIX"></label>
-
-      <div class="form-actions">
-        <button type="button" id="cancelPlan" class="secondary">Cancelar</button>
-        <button type="submit" class="primary">Salvar</button>
-      </div>
-    </form>
-  </template>
-
-  <template id="serverFormTpl">
-    <form id="serverForm" class="form">
-      <h2 id="serverFormTitle">Novo Servidor</h2>
-      <label class="field"><span>Nome</span><input name="nome" required></label>
-      <div class="two-col">
-        <label class="field"><span>URL1</span><input name="url1"></label>
-        <label class="field"><span>URL2</span><input name="url2"></label>
-      </div>
-      <div class="two-col">
-        <label class="field"><span>App1</span><input name="app1"></label>
-        <label class="field"><span>App2</span><input name="app2"></label>
-      </div>
-
-      <div class="form-actions">
-        <button type="button" id="cancelServer" class="secondary">Cancelar</button>
-        <button type="submit" class="primary">Salvar</button>
-      </div>
-    </form>
-  </template>
+  <!-- TEMPLATES DE FORMULÁRIOS -->
+  <template id="clientFormTpl">...</template>
+  <template id="planFormTpl">...</template>
+  <template id="serverFormTpl">...</template>
 
   <script src="app.js"></script>
 </body>
