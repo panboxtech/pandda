@@ -1,8 +1,9 @@
 /* app.js
    Protótipo Pandda - comportamento completo em mock
-   - Dados iniciais estão carregados como mock (3 planos, 10 clientes, 3 servidores)
-   - Persistência via localStorage para testar CRUD no navegador
-   - Supabase: as linhas de configuração estão comentadas mais abaixo, basta descomentar e adaptar
+   Atualizações:
+   - sidebar responsiva com botão de esconder/exibir (mobile e desktop)
+   - novo controle de expandir cliente: botão full-width abaixo do resumo com seta
+   - removido o botão "Detalhes" individual (substituído pelo expand-toggle)
 */
 
 /* -------------------------
@@ -32,20 +33,17 @@ const uid = () => Math.random().toString(36).slice(2,9);
    STORAGE: carregar / salvar
    ------------------------- */
 const STORAGE_KEY = 'pandda_mock_v1';
-
 function defaultData(){
   const planos = [
     { id: 'p1', nome: 'Básico', pontos: 10, valor: 29.90, validade: 1, linkCartao: 'https://pagto.example/basico', chavePIX: 'pix-basico' },
     { id: 'p2', nome: 'Pro', pontos: 30, valor: 69.90, validade: 3, linkCartao: 'https://pagto.example/pro', chavePIX: 'pix-pro' },
     { id: 'p3', nome: 'Anual', pontos: 120, valor: 199.90, validade: 12, linkCartao: 'https://pagto.example/anual', chavePIX: 'pix-anual' },
   ];
-
   const servidores = [
     { id: 's1', nome: 'Servidor Alpha', url1: 'https://alpha.example', url2: '', app1: 'app-alpha-1', app2: '' },
     { id: 's2', nome: 'Servidor Beta', url1: 'https://beta.example', url2: '', app1: 'app-beta-1', app2: 'app-beta-2' },
     { id: 's3', nome: 'Servidor Gamma', url1: 'https://gamma.example', url2: 'https://gamma2.example', app1: '', app2: '' },
   ];
-
   const baseDate = new Date();
   const clients = [
     { id:'c1', nome:'Ana Silva', whatsapp:'+5591988887777', email:'ana@example.com', dataCriacao: fmtDate(addDays(fmtDate(baseDate), -120)), dataVencimento: fmtDate(addMonths(fmtDate(baseDate), 1)), planoId:'p1', servidor1:'s1', servidor2:'', usuario1:'ana1', senha1:'pass', usuario2:'', senha2:'', statusNotificacao:true, observacoes:'Cliente VIP', codigoIndicacao:'X1', numeroRenovacoes:0, bloqueado:false },
@@ -59,10 +57,8 @@ function defaultData(){
     { id:'c9', nome:'Isabela Moura', whatsapp:'+5591922221111', email:'isabela@example.com', dataCriacao: fmtDate(addDays(fmtDate(baseDate), -365)), dataVencimento: fmtDate(addDays(fmtDate(baseDate), -20)), planoId:'p1', servidor1:'s1', servidor2:'', usuario1:'isabela', senha1:'pw', usuario2:'', senha2:'', statusNotificacao:false, observacoes:'Vencido menos de 30', codigoIndicacao:'A9', numeroRenovacoes:1, bloqueado:false },
     { id:'c10', nome:'João Pedro', whatsapp:'+5591911110000', email:'joao@example.com', dataCriacao: fmtDate(addDays(fmtDate(baseDate), -2)), dataVencimento: fmtDate(addMonths(fmtDate(baseDate), 6)), planoId:'p3', servidor1:'s2', servidor2:'s1', usuario1:'joao', senha1:'jo', usuario2:'', senha2:'', statusNotificacao:true, observacoes:'Novo cliente', codigoIndicacao:'B1', numeroRenovacoes:0, bloqueado:false },
   ];
-
   return { planos, servidores, clientes: clients };
 }
-
 function loadState(){
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) {
@@ -70,17 +66,9 @@ function loadState(){
     saveState(d);
     return d;
   }
-  try {
-    return JSON.parse(raw);
-  } catch(e) {
-    const d = defaultData();
-    saveState(d);
-    return d;
-  }
+  try { return JSON.parse(raw); } catch(e){ const d = defaultData(); saveState(d); return d; }
 }
-function saveState(state){
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
+function saveState(state){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
 /* -------------------------
    Mock DB in memory
@@ -88,28 +76,12 @@ function saveState(state){
 let DB = loadState();
 
 /* -------------------------
-   Supabase notes (commented)
-   - Quando quiser trocar para Supabase, crie instância e use os métodos
-   - Exemplo (comente/descomente abaixo e instale supabase client):
-   //
-   // import { createClient } from '@supabase/supabase-js'
-   // const supabaseUrl = 'https://xxx.supabase.co'
-   // const supabaseKey = 'public-anon-key'
-   // const supabase = createClient(supabaseUrl, supabaseKey);
-   //
-   // Depois substitua operações locais por chamadas supabase
-   // Ex: supabase.from('clientes').insert([...]) ou .update().match({...})
-   //
-*/
-
-/* -------------------------
    Mapeamento DOM e inicialização
    ------------------------- */
-const state = {
-  filter: { text: '', onlyNotified:false, dateRange: null },
-};
+const state = { filter: { text: '', onlyNotified:false, dateRange: null } };
 
 function init(){
+  bindTopbar();
   bindAuth();
   bindNav();
   renderAll();
@@ -117,25 +89,47 @@ function init(){
 }
 
 /* -------------------------
+   TOPBAR: sidebar toggle
+   - mobile: toggles open class
+   - desktop: toggles collapsed class
+*/
+function bindTopbar(){
+  const toggle = qs('#sidebarToggle');
+  const sidebar = qs('#sidebar');
+  toggle.addEventListener('click', () => {
+    // on small screens, toggle 'open'
+    if (window.matchMedia('(max-width:880px)').matches) {
+      sidebar.classList.toggle('open');
+    } else {
+      // desktop: collapse / expand
+      sidebar.classList.toggle('collapsed');
+    }
+  });
+
+  // close sidebar on outside click for mobile
+  document.addEventListener('click', (e) => {
+    if (window.matchMedia('(max-width:880px)').matches) {
+      if (!qs('#sidebar')) return;
+      const sidebarRect = qs('#sidebar').getBoundingClientRect();
+      const clickedInside = qs('#sidebar').contains(e.target) || qs('#sidebarToggle').contains(e.target);
+      if (!clickedInside && qs('#sidebar').classList.contains('open')) {
+        qs('#sidebar').classList.remove('open');
+      }
+    }
+  });
+}
+
+/* -------------------------
    AUTH (simples para protótipo)
-   - mantém loginView e app mutuamente exclusivos
-   ------------------------- */
+*/
 function bindAuth(){
   const loginView = qs('#loginView');
   const appView = qs('#app');
   const btnLogin = qs('#btnLogin');
   const toggleEye = qs('#toggleEye');
 
-  // garantir estado inicial consistente
-  if (loginView.classList.contains('active')) {
-    loginView.classList.add('active');
-    appView.classList.remove('active');
-    qs('#app').classList.remove('active');
-  } else {
-    appView.classList.add('active');
-    qs('#app').classList.add('active');
-    loginView.classList.remove('active');
-  }
+  // inicial: garantir apenas login visível
+  if (loginView) { loginView.classList.add('active'); appView.classList.remove('active'); qs('#app') && qs('#app').classList.remove('active'); }
 
   toggleEye.addEventListener('click', () => {
     const p = qs('#loginPass');
@@ -143,28 +137,22 @@ function bindAuth(){
   });
 
   btnLogin.addEventListener('click', () => {
-    // protótipo: qualquer credencial acessa
     loginView.classList.remove('active');
     appView.classList.add('active');
     qs('#app').classList.add('active');
-
-    // abrir página clientes por padrão e garantir que apenas ela seja visível
     showView('clientesView');
   });
 
   qs('#logoutBtn').addEventListener('click', () => {
-    // voltar para login: esconder app e mostrar login
     qs('#app').classList.remove('active');
     qs('#loginView').classList.add('active');
-    // limpar seleção de painel
     qsa('.panel').forEach(p => p.classList.remove('active'));
-    qs('#clientesView').classList.remove('active');
   });
 }
 
 /* -------------------------
    NAVIGAÇÃO
-   ------------------------- */
+*/
 function bindNav(){
   qsa('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -172,6 +160,10 @@ function bindNav(){
       btn.classList.add('active');
       const view = btn.dataset.view;
       showView(view);
+      // close mobile sidebar when selecting
+      if (window.matchMedia('(max-width:880px)').matches) {
+        qs('#sidebar') && qs('#sidebar').classList.remove('open');
+      }
     });
   });
 }
@@ -180,20 +172,14 @@ function showView(id){
   qsa('.panel').forEach(p => p.classList.remove('active'));
   const target = qs(`#${id}`);
   if (target) target.classList.add('active');
-
-  qsa('.nav-btn').forEach(b => {
-    if (b.dataset.view === id) b.classList.add('active');
-    else b.classList.remove('active');
-  });
-
+  qsa('.nav-btn').forEach(b => { if (b.dataset.view === id) b.classList.add('active'); else b.classList.remove('active'); });
   target && target.scrollIntoView({behavior:'smooth'});
-  // atualizar listas sempre que trocar de aba
   renderAll();
 }
 
 /* -------------------------
    Render geral
-   ------------------------- */
+*/
 function renderAll(){
   renderSummaryCards();
   renderClientsList();
@@ -203,33 +189,21 @@ function renderAll(){
 
 /* -------------------------
    RESUMO: cards que filtram por vencimento
-   ------------------------- */
+*/
 function computeClientBuckets(){
   const today = new Date();
-  function daysDiff(dateStr){
-    const d = new Date(dateStr); return Math.floor((d - today)/(1000*60*60*24));
-  }
+  function daysDiff(dateStr){ const d = new Date(dateStr); return Math.floor((d - today)/(1000*60*60*24)); }
   const clients = DB.clientes;
   const total = clients.length;
   const ativos = clients.filter(c => new Date(c.dataVencimento) >= new Date()).length;
-  const vencendo = clients.filter(c => {
-    const d = daysDiff(c.dataVencimento);
-    return d >=0 && d <= 7;
-  }).length;
-  const vencidosMenos30 = clients.filter(c => {
-    const d = daysDiff(c.dataVencimento);
-    return d < 0 && d >= -30;
-  }).length;
-  const vencidosMais30 = clients.filter(c=>{
-    const d = daysDiff(c.dataVencimento);
-    return d < -30;
-  }).length;
+  const vencendo = clients.filter(c => { const d = daysDiff(c.dataVencimento); return d >=0 && d <= 7; }).length;
+  const vencidosMenos30 = clients.filter(c => { const d = daysDiff(c.dataVencimento); return d < 0 && d >= -30; }).length;
+  const vencidosMais30 = clients.filter(c=> { const d = daysDiff(c.dataVencimento); return d < -30; }).length;
   return { total, ativos, vencendo, vencidosMenos30, vencidosMais30 };
 }
 
 function renderSummaryCards(){
-  const container = qs('#summaryCards');
-  if (!container) return;
+  const container = qs('#summaryCards'); if (!container) return;
   container.innerHTML = '';
   const b = computeClientBuckets();
   const cards = [
@@ -244,24 +218,16 @@ function renderSummaryCards(){
     el.className = 'card';
     el.id = c.id;
     el.innerHTML = `<h3>${c.title}</h3><p>${c.value}</p>`;
-    el.addEventListener('click', () => {
-      applySummaryFilter(c.filter);
-    });
+    el.addEventListener('click', () => { applySummaryFilter(c.filter); });
     container.appendChild(el);
   });
 }
 
-/* -------------------------
-   Filtragem a partir dos cards
-   ------------------------- */
-function applySummaryFilter(f){
-  state.filter.dateRange = f;
-  renderClientsList();
-}
+function applySummaryFilter(f){ state.filter.dateRange = f; renderClientsList(); }
 
 /* -------------------------
    CLIENTES: render, busca, filtragem
-   ------------------------- */
+*/
 function matchesSearch(client, text){
   if (!text) return true;
   const t = text.toLowerCase();
@@ -282,8 +248,7 @@ function matchesSummaryFilter(client, filter){
 }
 
 function renderClientsList(){
-  const list = qs('#clientsList');
-  if (!list) return;
+  const list = qs('#clientsList'); if (!list) return;
   list.innerHTML = '';
 
   const text = qs('#searchInput') ? qs('#searchInput').value.trim() : '';
@@ -299,13 +264,16 @@ function renderClientsList(){
   out.forEach(c => list.appendChild(clientRow(c)));
 }
 
-/* cria o elemento da linha/ cartão do cliente */
+/* cria o elemento da linha/ cartão do cliente
+   - substitui botão "Detalhes" por expand-toggle full-width logo de seta
+*/
 function clientRow(client){
   const row = document.createElement('div');
   row.className = 'client-row';
   if (client.bloqueado) row.style.opacity = '0.5';
   row.dataset.id = client.id;
 
+  // resumo
   const left = document.createElement('div'); left.className = 'client-left';
   const name = document.createElement('div'); name.className = 'client-name'; name.textContent = client.nome;
   const wa = document.createElement('div'); wa.className = 'whatsapp';
@@ -319,11 +287,6 @@ function clientRow(client){
   notifyBtn.addEventListener('click', () => notifyClient(client.id));
   const renewBtn = document.createElement('button'); renewBtn.className='small-btn renew-btn'; renewBtn.innerHTML='🔁 Renovar';
   renewBtn.addEventListener('click', () => openRenewModal(client.id));
-  const expandBtn = document.createElement('button'); expandBtn.className='small-btn'; expandBtn.textContent = 'Detalhes';
-  expandBtn.addEventListener('click', () => {
-    row.classList.toggle('expanded');
-  });
-
   const editBtn = document.createElement('button'); editBtn.className='small-btn'; editBtn.textContent='✏️ Editar';
   editBtn.addEventListener('click', ()=> openEditClient(client.id, row));
 
@@ -331,14 +294,23 @@ function clientRow(client){
   right.appendChild(notifyBtn);
   right.appendChild(renewBtn);
   right.appendChild(editBtn);
-  right.appendChild(expandBtn);
 
   const summary = document.createElement('div'); summary.className='client-summary';
   summary.appendChild(left); summary.appendChild(right);
 
-  const details = document.createElement('div'); details.className='client-details';
+  // expand toggle (full-width below summary)
+  const expandToggle = document.createElement('button');
+  expandToggle.className = 'expand-toggle';
+  expandToggle.innerHTML = `<span>Mostrar mais informações</span><span class="arrow">▼</span>`;
+  expandToggle.addEventListener('click', () => {
+    row.classList.toggle('expanded');
+  });
+
+  // details
+  const details = document.createElement('div'); details.className = 'client-details';
   details.innerHTML = clientDetailsHtml(client);
 
+  // copiar whatsapp
   wa.querySelector('.copy-btn').addEventListener('click', (e) => {
     navigator.clipboard?.writeText(client.whatsapp || '')?.then(()=> {
       e.target.textContent = '✔';
@@ -346,6 +318,7 @@ function clientRow(client){
     });
   });
 
+  // bloquear (no detalhe)
   const blockBtn = details.querySelector('.block-client');
   blockBtn.addEventListener('click', ()=> {
     if (!confirm(`Bloquear cliente ${client.nome}? Isso define bloqueado = true.`)) return;
@@ -355,6 +328,7 @@ function clientRow(client){
   });
 
   row.appendChild(summary);
+  row.appendChild(expandToggle);
   row.appendChild(details);
   return row;
 }
@@ -384,7 +358,7 @@ function clientDetailsHtml(client){
 
 /* -------------------------
    NOTIFICAR cliente => simulação
-   ------------------------- */
+*/
 function notifyClient(clientId){
   const c = DB.clientes.find(x=>x.id===clientId);
   if (!c) return;
@@ -396,17 +370,15 @@ function notifyClient(clientId){
 
 /* -------------------------
    RENOVAÇÃO
-   ------------------------- */
+*/
 function openRenewModal(clientId){
   const client = DB.clientes.find(c=>c.id===clientId);
   if (!client) return;
   openModal(buildRenewForm(client));
 }
-
 function buildRenewForm(client){
   const div = document.createElement('div');
   const title = document.createElement('h2'); title.textContent = `Renovar ${client.nome}`; div.appendChild(title);
-
   const form = document.createElement('form');
   form.innerHTML = `
     <label class="field"><span>Plano</span><select name="planoId"></select></label>
@@ -426,12 +398,10 @@ function buildRenewForm(client){
   const dateIn = form.querySelector('input[name=dataVencimento]');
   const selectedPlan = DB.planos.find(p=>p.id===sel.value);
   dateIn.value = addMonths(client.dataVencimento || fmtDate(new Date()), selectedPlan ? selectedPlan.validade : 1);
-
   sel.addEventListener('change', ()=> {
     const p = DB.planos.find(x=>x.id===sel.value);
     dateIn.value = p ? addMonths(client.dataVencimento || fmtDate(new Date()), p.validade) : dateIn.value;
   });
-
   form.querySelector('#cancelRenew').addEventListener('click', closeModal);
   form.addEventListener('submit', (e)=>{
     e.preventDefault();
@@ -445,25 +415,22 @@ function buildRenewForm(client){
     renderAll();
     alert(`Cliente ${client.nome} renovado até ${newDate}.`);
   });
-
   div.appendChild(form);
   return div;
 }
 
 /* -------------------------
    EDITAR CLIENTE
-   ------------------------- */
+*/
 function openEditClient(clientId, rowNode){
   const client = DB.clientes.find(c=>c.id===clientId);
   if (!client) return;
   const tpl = qs('#clientFormTpl').content.cloneNode(true);
   const form = tpl.querySelector('form');
   tpl.querySelector('#clientFormTitle').textContent = `Editar ${client.nome}`;
-
   const planoSel = form.querySelector('select[name=planoId]');
   DB.planos.forEach(p => { const o = document.createElement('option'); o.value = p.id; o.textContent = p.nome; if (p.id===client.planoId) o.selected=true; planoSel.appendChild(o); });
-  const srv1 = form.querySelector('select[name=servidor1]');
-  const srv2 = form.querySelector('select[name=servidor2]');
+  const srv1 = form.querySelector('select[name=servidor1]'); const srv2 = form.querySelector('select[name=servidor2]');
   const emptyOpt = document.createElement('option'); emptyOpt.value=''; emptyOpt.textContent='—';
   srv1.appendChild(emptyOpt.cloneNode(true)); srv2.appendChild(emptyOpt.cloneNode(true));
   DB.servidores.forEach(s => { const o1=document.createElement('option'); o1.value=s.id; o1.textContent=s.nome; if (s.id===client.servidor1) o1.selected=true; srv1.appendChild(o1); const o2=o1.cloneNode(true); if (s.id===client.servidor2) o2.selected=true; srv2.appendChild(o2); });
@@ -511,15 +478,14 @@ function openEditClient(clientId, rowNode){
 
 /* -------------------------
    CADASTRAR NOVO CLIENTE
-   ------------------------- */
+*/
 qs('#btnNewClient').addEventListener('click', ()=> {
   const tpl = qs('#clientFormTpl').content.cloneNode(true);
   const form = tpl.querySelector('form');
   tpl.querySelector('#clientFormTitle').textContent = 'Novo Cliente';
   const planoSel = form.querySelector('select[name=planoId]');
   DB.planos.forEach(p => { const o=document.createElement('option'); o.value=p.id; o.textContent=p.nome; planoSel.appendChild(o); });
-  const srv1 = form.querySelector('select[name=servidor1]');
-  const srv2 = form.querySelector('select[name=servidor2]');
+  const srv1 = form.querySelector('select[name=servidor1]'); const srv2 = form.querySelector('select[name=servidor2]');
   const emptyOpt = document.createElement('option'); emptyOpt.value=''; emptyOpt.textContent='—';
   srv1.appendChild(emptyOpt.cloneNode(true)); srv2.appendChild(emptyOpt.cloneNode(true));
   DB.servidores.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.nome; srv1.appendChild(o); srv2.appendChild(o.cloneNode(true)); });
@@ -559,10 +525,9 @@ qs('#btnNewClient').addEventListener('click', ()=> {
 
 /* -------------------------
    PLANOS: listagem, criar, editar
-   ------------------------- */
+*/
 function renderPlansList(){
-  const container = qs('#plansList');
-  if (!container) return;
+  const container = qs('#plansList'); if (!container) return;
   container.innerHTML = '';
   DB.planos.forEach(p => {
     const row = document.createElement('div'); row.className='item-row';
@@ -580,7 +545,6 @@ function renderPlansList(){
 qs('#btnNewPlan').addEventListener('click', ()=> {
   const tpl = qs('#planFormTpl').content.cloneNode(true);
   const form = tpl.querySelector('form');
-  tpl.querySelector('#planFormTitle').textContent = 'Novo Plano';
   form.querySelector('#cancelPlan').addEventListener('click', closeModal);
   form.addEventListener('submit', (e)=>{
     e.preventDefault();
@@ -604,11 +568,9 @@ qs('#btnNewPlan').addEventListener('click', ()=> {
 });
 
 function openEditPlan(planId){
-  const plan = DB.planos.find(p=>p.id===planId);
-  if (!plan) return;
+  const plan = DB.planos.find(p=>p.id===planId); if (!plan) return;
   const tpl = qs('#planFormTpl').content.cloneNode(true);
   const form = tpl.querySelector('form');
-  tpl.querySelector('#planFormTitle').textContent = `Editar ${plan.nome}`;
   const f = form.elements;
   f.namedItem('nome').value = plan.nome;
   f.namedItem('pontos').value = plan.pontos;
@@ -636,10 +598,9 @@ function openEditPlan(planId){
 
 /* -------------------------
    SERVIDORES: listagem, criar, editar
-   ------------------------- */
+*/
 function renderServersList(){
-  const container = qs('#serversList');
-  if (!container) return;
+  const container = qs('#serversList'); if (!container) return;
   container.innerHTML = '';
   DB.servidores.forEach(s => {
     const row = document.createElement('div'); row.className='item-row';
@@ -657,7 +618,6 @@ function renderServersList(){
 qs('#btnNewServer').addEventListener('click', ()=> {
   const tpl = qs('#serverFormTpl').content.cloneNode(true);
   const form = tpl.querySelector('form');
-  tpl.querySelector('#serverFormTitle').textContent = 'Novo Servidor';
   form.querySelector('#cancelServer').addEventListener('click', closeModal);
   form.addEventListener('submit', (e)=>{
     e.preventDefault();
@@ -680,8 +640,7 @@ qs('#btnNewServer').addEventListener('click', ()=> {
 });
 
 function openEditServer(serverId){
-  const s = DB.servidores.find(x=>x.id===serverId);
-  if (!s) return;
+  const s = DB.servidores.find(x=>x.id===serverId); if (!s) return;
   const tpl = qs('#serverFormTpl').content.cloneNode(true);
   const form = tpl.querySelector('form');
   const f = form.elements;
@@ -709,7 +668,7 @@ function openEditServer(serverId){
 
 /* -------------------------
    MODAL UTIL
-   ------------------------- */
+*/
 function openModal(content){
   const modal = qs('#modal');
   const panel = qs('#modalContent');
@@ -728,25 +687,16 @@ qs('#modal').addEventListener('click', (e)=> { if (e.target === qs('#modal')) cl
 
 /* -------------------------
    UI: busca toggle e bind
-   ------------------------- */
+*/
 function bindGlobalUI(){
   const search = qs('#searchInput');
-  if (search) search.addEventListener('input', ()=> {
-    state.filter.text = qs('#searchInput').value;
-    renderClientsList();
-  });
+  if (search) search.addEventListener('input', ()=> { state.filter.text = qs('#searchInput').value; renderClientsList(); });
   const toggle = qs('#onlyNotifiedToggle');
-  if (toggle) toggle.addEventListener('change', ()=> {
-    state.filter.onlyNotified = qs('#onlyNotifiedToggle').checked;
-    renderClientsList();
-  });
-
-  document.addEventListener('keydown', (e)=> {
-    if (e.key === 'Escape') closeModal();
-  });
+  if (toggle) toggle.addEventListener('change', ()=> { state.filter.onlyNotified = qs('#onlyNotifiedToggle').checked; renderClientsList(); });
+  document.addEventListener('keydown', (e)=> { if (e.key === 'Escape') closeModal(); });
 }
 
 /* -------------------------
    Inicializa app
-   ------------------------- */
+*/
 init();
