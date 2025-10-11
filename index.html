@@ -8,25 +8,24 @@
 </head>
 <body>
   <!--
-    Projeto Pandda - Protótipo completo em mock (atualizado)
-    - Arquivo único de interface (index.html)
-    - CSS: styles.css (na raiz) — atualizado para sidebar responsiva
-    - JS: app.js (na raiz) — atualizado para toggle sidebar e novo botão de expandir cliente
+    Pandda — Protótipo (atualizado)
+    - HTML único: index.html
+    - CSS: styles.css (na raiz)
+    - JS: app.js (na raiz)
+    - Mudanças nesta versão:
+      * Topbar fixa no topo (botão do menu sempre visível em mobile)
+      * Área de conteúdo é responsiva e scrollável (ajusta-se ao tamanho da tela)
+      * Formulários e listagens respeitam largura da tela
   -->
 
-  <!-- ============================
-       BARRA SUPERIOR (mobile / toggle)
-       - botão para esconder/exibir sidebar
-       ============================ -->
+  <!-- TOPBAR FIXA -->
   <header id="topbar">
     <button id="sidebarToggle" class="icon-btn" aria-label="Toggle menu">☰</button>
     <div class="topbar-title">PANDDA — Protótipo</div>
     <div class="topbar-space"></div>
   </header>
 
-  <!-- ============================
-       PAGINA DE LOGIN
-       ============================ -->
+  <!-- LOGIN VIEW -->
   <main id="loginView" class="view active">
     <div class="login-box">
       <img src="data:image/svg+xml;utf8,
@@ -54,11 +53,9 @@
     </div>
   </main>
 
-  <!-- ============================
-       DASHBOARD (PRINCIPAL)
-       ============================ -->
+  <!-- APP VIEW -->
   <div id="app" class="view">
-    <!-- LATERAL / MENU -->
+    <!-- SIDEBAR -->
     <aside id="sidebar" class="">
       <div class="sidebar-top">
         <div class="logo-mini">PANDDA</div>
@@ -74,11 +71,9 @@
       </div>
     </aside>
 
-    <!-- CONTEÚDO -->
+    <!-- CONTEÚDO PRINCIPAL -->
     <section id="content">
-      <!-- ============================
-           VIEW CLIENTES
-           ============================ -->
+      <!-- CLIENTES -->
       <section id="clientesView" class="panel active">
         <header class="panel-header">
           <h1>Clientes</h1>
@@ -92,16 +87,18 @@
           </div>
         </header>
 
-        <!-- CARDS RESUMO -->
-        <div id="summaryCards" class="cards-grid" aria-hidden="false"></div>
+        <div id="summaryAndList" class="panel-body">
+          <!-- CARDS RESUMO -->
+          <div id="summaryCards" class="cards-grid" aria-hidden="false"></div>
 
-        <!-- LISTA DE CLIENTES -->
-        <div id="clientsList" class="list"></div>
+          <!-- LISTA DE CLIENTES: área com scroll independente -->
+          <div id="clientsWrapper" class="list-wrapper">
+            <div id="clientsList" class="list"></div>
+          </div>
+        </div>
       </section>
 
-      <!-- ============================
-           VIEW PLANOS
-           ============================ -->
+      <!-- PLANOS -->
       <section id="planosView" class="panel">
         <header class="panel-header">
           <h1>Planos</h1>
@@ -110,12 +107,12 @@
           </div>
         </header>
 
-        <div id="plansList" class="list"></div>
+        <div id="plansWrapper" class="panel-body list-wrapper">
+          <div id="plansList" class="list"></div>
+        </div>
       </section>
 
-      <!-- ============================
-           VIEW SERVIDORES
-           ============================ -->
+      <!-- SERVIDORES -->
       <section id="servidoresView" class="panel">
         <header class="panel-header">
           <h1>Servidores</h1>
@@ -124,14 +121,14 @@
           </div>
         </header>
 
-        <div id="serversList" class="list"></div>
+        <div id="serversWrapper" class="panel-body list-wrapper">
+          <div id="serversList" class="list"></div>
+        </div>
       </section>
     </section>
   </div>
 
-  <!-- ============================
-       MODAIS, FORMULÁRIOS E COMPONENTES GLOBAIS
-       ============================ -->
+  <!-- MODAL -->
   <div id="modal" class="modal hidden" role="dialog" aria-hidden="true">
     <div class="modal-panel">
       <button id="modalClose" class="close">✕</button>
@@ -139,39 +136,48 @@
     </div>
   </div>
 
-  <!-- TEMPLATES (mantidos) -->
+  <!-- TEMPLATES -->
   <template id="clientFormTpl">
     <form id="clientForm" class="form">
       <h2 id="clientFormTitle">Novo Cliente</h2>
+
       <div class="two-col">
         <label class="field"><span>Nome</span><input name="nome" required></label>
         <label class="field"><span>WhatsApp</span><input name="whatsapp"></label>
       </div>
+
       <div class="two-col">
         <label class="field"><span>E‑mail</span><input name="email" type="email"></label>
         <label class="field"><span>Data de criação</span><input name="dataCriacao" type="date"></label>
       </div>
+
       <div class="two-col">
         <label class="field"><span>Data de vencimento</span><input name="dataVencimento" type="date"></label>
         <label class="field"><span>Plano</span><select name="planoId"></select></label>
       </div>
+
       <div class="two-col">
         <label class="field"><span>Servidor 1</span><select name="servidor1"></select></label>
         <label class="field"><span>Servidor 2</span><select name="servidor2"></select></label>
       </div>
+
       <div class="two-col">
         <label class="field"><span>Usuário 1</span><input name="usuario1"></label>
         <label class="field"><span>Senha 1</span><input name="senha1"></label>
       </div>
+
       <div class="two-col">
         <label class="field"><span>Usuário 2</span><input name="usuario2"></label>
         <label class="field"><span>Senha 2</span><input name="senha2"></label>
       </div>
+
       <label class="field"><span>Observações</span><textarea name="observacoes"></textarea></label>
+
       <div class="two-col">
         <label class="field"><span>Código Indicação</span><input name="codigoIndicacao"></label>
         <label class="field"><span>Nº Renovações</span><input name="numeroRenovacoes" type="number" min="0"></label>
       </div>
+
       <div class="form-actions">
         <button type="button" id="cancelClient" class="secondary">Cancelar</button>
         <button type="submit" class="primary">Salvar</button>
@@ -192,6 +198,7 @@
         <label class="field"><span>Link Cartão</span><input name="linkCartao"></label>
       </div>
       <label class="field"><span>Chave PIX</span><input name="chavePIX"></label>
+
       <div class="form-actions">
         <button type="button" id="cancelPlan" class="secondary">Cancelar</button>
         <button type="submit" class="primary">Salvar</button>
@@ -211,6 +218,7 @@
         <label class="field"><span>App1</span><input name="app1"></label>
         <label class="field"><span>App2</span><input name="app2"></label>
       </div>
+
       <div class="form-actions">
         <button type="button" id="cancelServer" class="secondary">Cancelar</button>
         <button type="submit" class="primary">Salvar</button>
