@@ -1,14 +1,11 @@
 /* app.js
-   Protótipo Pandda - comportamento completo em mock
-   Atualizações:
-   - sidebar responsiva com botão de esconder/exibir (mobile e desktop)
-   - novo controle de expandir cliente: botão full-width abaixo do resumo com seta
-   - removido o botão "Detalhes" individual (substituído pelo expand-toggle)
+   Protótipo Pandda - atualizações:
+   - topbar fixo; sidebar toggle sempre acessível no topo
+   - listagem e formulários adaptativos e scrolláveis em mobile
+   - expand-toggle full-width para detalhes do cliente
 */
 
-/* -------------------------
-   Utilitários gerais
-   ------------------------- */
+/* UTILITÁRIOS */
 const qs = (sel, ctx=document) => ctx.querySelector(sel);
 const qsa = (sel, ctx=document) => Array.from(ctx.querySelectorAll(sel));
 const fmtDate = d => {
@@ -17,21 +14,11 @@ const fmtDate = d => {
   if (isNaN(dt)) return d;
   return dt.toISOString().slice(0,10);
 };
-const addDays = (dateStr, days) => {
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() + days);
-  return fmtDate(d);
-};
-const addMonths = (dateStr, months) => {
-  const d = new Date(dateStr);
-  d.setMonth(d.getMonth() + months);
-  return fmtDate(d);
-};
+const addDays = (dateStr, days) => { const d = new Date(dateStr); d.setDate(d.getDate() + days); return fmtDate(d); };
+const addMonths = (dateStr, months) => { const d = new Date(dateStr); d.setMonth(d.getMonth() + months); return fmtDate(d); };
 const uid = () => Math.random().toString(36).slice(2,9);
 
-/* -------------------------
-   STORAGE: carregar / salvar
-   ------------------------- */
+/* STORAGE / MOCK DATA */
 const STORAGE_KEY = 'pandda_mock_v1';
 function defaultData(){
   const planos = [
@@ -59,27 +46,14 @@ function defaultData(){
   ];
   return { planos, servidores, clientes: clients };
 }
-function loadState(){
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    const d = defaultData();
-    saveState(d);
-    return d;
-  }
-  try { return JSON.parse(raw); } catch(e){ const d = defaultData(); saveState(d); return d; }
-}
+function loadState(){ const raw = localStorage.getItem(STORAGE_KEY); if (!raw) { const d = defaultData(); saveState(d); return d; } try { return JSON.parse(raw); } catch(e) { const d = defaultData(); saveState(d); return d; } }
 function saveState(state){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-
-/* -------------------------
-   Mock DB in memory
-   ------------------------- */
 let DB = loadState();
 
-/* -------------------------
-   Mapeamento DOM e inicialização
-   ------------------------- */
+/* APP STATE */
 const state = { filter: { text: '', onlyNotified:false, dateRange: null } };
 
+/* INIT */
 function init(){
   bindTopbar();
   bindAuth();
@@ -88,55 +62,52 @@ function init(){
   bindGlobalUI();
 }
 
-/* -------------------------
-   TOPBAR: sidebar toggle
-   - mobile: toggles open class
-   - desktop: toggles collapsed class
-*/
+/* TOPBAR & SIDEBAR TOGGLE */
 function bindTopbar(){
   const toggle = qs('#sidebarToggle');
   const sidebar = qs('#sidebar');
+
   toggle.addEventListener('click', () => {
-    // on small screens, toggle 'open'
     if (window.matchMedia('(max-width:880px)').matches) {
-      sidebar.classList.toggle('open');
+      sidebar.classList.toggle('open'); // mobile slide-in
     } else {
-      // desktop: collapse / expand
-      sidebar.classList.toggle('collapsed');
+      sidebar.classList.toggle('collapsed'); // desktop collapse
     }
   });
 
-  // close sidebar on outside click for mobile
+  // close mobile sidebar when touching outside
   document.addEventListener('click', (e) => {
     if (window.matchMedia('(max-width:880px)').matches) {
       if (!qs('#sidebar')) return;
-      const sidebarRect = qs('#sidebar').getBoundingClientRect();
-      const clickedInside = qs('#sidebar').contains(e.target) || qs('#sidebarToggle').contains(e.target);
-      if (!clickedInside && qs('#sidebar').classList.contains('open')) {
-        qs('#sidebar').classList.remove('open');
+      const sidebarEl = qs('#sidebar');
+      const toggleBtn = qs('#sidebarToggle');
+      const clickedInside = sidebarEl.contains(e.target) || toggleBtn.contains(e.target);
+      if (!clickedInside && sidebarEl.classList.contains('open')) {
+        sidebarEl.classList.remove('open');
       }
     }
   });
+
+  // ensure toggle button stays visible and fixed (topbar is fixed)
 }
 
-/* -------------------------
-   AUTH (simples para protótipo)
-*/
+/* AUTH */
 function bindAuth(){
   const loginView = qs('#loginView');
   const appView = qs('#app');
   const btnLogin = qs('#btnLogin');
   const toggleEye = qs('#toggleEye');
 
-  // inicial: garantir apenas login visível
+  // initial visibility
   if (loginView) { loginView.classList.add('active'); appView.classList.remove('active'); qs('#app') && qs('#app').classList.remove('active'); }
 
   toggleEye.addEventListener('click', () => {
-    const p = qs('#loginPass');
+    const p = qs('#loginPass'); if (!p) return;
     p.type = p.type === 'password' ? 'text' : 'password';
   });
 
   btnLogin.addEventListener('click', () => {
+    // show app and default to clientes
     loginView.classList.remove('active');
     appView.classList.add('active');
     qs('#app').classList.add('active');
@@ -150,9 +121,7 @@ function bindAuth(){
   });
 }
 
-/* -------------------------
-   NAVIGAÇÃO
-*/
+/* NAV */
 function bindNav(){
   qsa('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -160,10 +129,8 @@ function bindNav(){
       btn.classList.add('active');
       const view = btn.dataset.view;
       showView(view);
-      // close mobile sidebar when selecting
-      if (window.matchMedia('(max-width:880px)').matches) {
-        qs('#sidebar') && qs('#sidebar').classList.remove('open');
-      }
+      // close mobile sidebar after selection
+      if (window.matchMedia('(max-width:880px)').matches) qs('#sidebar') && qs('#sidebar').classList.remove('open');
     });
   });
 }
@@ -177,9 +144,7 @@ function showView(id){
   renderAll();
 }
 
-/* -------------------------
-   Render geral
-*/
+/* RENDER ALL */
 function renderAll(){
   renderSummaryCards();
   renderClientsList();
@@ -187,9 +152,7 @@ function renderAll(){
   renderServersList();
 }
 
-/* -------------------------
-   RESUMO: cards que filtram por vencimento
-*/
+/* SUMMARY CARDS */
 function computeClientBuckets(){
   const today = new Date();
   function daysDiff(dateStr){ const d = new Date(dateStr); return Math.floor((d - today)/(1000*60*60*24)); }
@@ -222,12 +185,9 @@ function renderSummaryCards(){
     container.appendChild(el);
   });
 }
-
 function applySummaryFilter(f){ state.filter.dateRange = f; renderClientsList(); }
 
-/* -------------------------
-   CLIENTES: render, busca, filtragem
-*/
+/* CLIENTS: filtering, rendering */
 function matchesSearch(client, text){
   if (!text) return true;
   const t = text.toLowerCase();
@@ -235,8 +195,7 @@ function matchesSearch(client, text){
 }
 function matchesSummaryFilter(client, filter){
   if (!filter) return true;
-  const today = new Date();
-  const diff = Math.floor((new Date(client.dataVencimento) - today)/(1000*60*60*24));
+  const diff = Math.floor((new Date(client.dataVencimento) - new Date())/(1000*60*60*24));
   switch(filter.type){
     case 'ativos': return diff >= 0;
     case 'vencendo': return diff >=0 && diff <=7;
@@ -264,20 +223,15 @@ function renderClientsList(){
   out.forEach(c => list.appendChild(clientRow(c)));
 }
 
-/* cria o elemento da linha/ cartão do cliente
-   - substitui botão "Detalhes" por expand-toggle full-width logo de seta
-*/
+/* clientRow: summary + expand-toggle + details */
 function clientRow(client){
-  const row = document.createElement('div');
-  row.className = 'client-row';
+  const row = document.createElement('div'); row.className = 'client-row'; row.dataset.id = client.id;
   if (client.bloqueado) row.style.opacity = '0.5';
-  row.dataset.id = client.id;
 
-  // resumo
+  // summary
   const left = document.createElement('div'); left.className = 'client-left';
   const name = document.createElement('div'); name.className = 'client-name'; name.textContent = client.nome;
-  const wa = document.createElement('div'); wa.className = 'whatsapp';
-  wa.innerHTML = `${client.whatsapp || ''} <button title="Copiar" class="small-btn copy-btn">📋</button>`;
+  const wa = document.createElement('div'); wa.className = 'whatsapp'; wa.innerHTML = `${client.whatsapp || ''} <button title="Copiar" class="small-btn copy-btn">📋</button>`;
   left.appendChild(name); left.appendChild(wa);
 
   const right = document.createElement('div'); right.className = 'actions';
@@ -290,27 +244,23 @@ function clientRow(client){
   const editBtn = document.createElement('button'); editBtn.className='small-btn'; editBtn.textContent='✏️ Editar';
   editBtn.addEventListener('click', ()=> openEditClient(client.id, row));
 
-  right.appendChild(dt);
-  right.appendChild(notifyBtn);
-  right.appendChild(renewBtn);
-  right.appendChild(editBtn);
+  right.appendChild(dt); right.appendChild(notifyBtn); right.appendChild(renewBtn); right.appendChild(editBtn);
 
   const summary = document.createElement('div'); summary.className='client-summary';
   summary.appendChild(left); summary.appendChild(right);
 
-  // expand toggle (full-width below summary)
-  const expandToggle = document.createElement('button');
-  expandToggle.className = 'expand-toggle';
+  // expand toggle full width below summary
+  const expandToggle = document.createElement('button'); expandToggle.className='expand-toggle';
   expandToggle.innerHTML = `<span>Mostrar mais informações</span><span class="arrow">▼</span>`;
   expandToggle.addEventListener('click', () => {
     row.classList.toggle('expanded');
   });
 
   // details
-  const details = document.createElement('div'); details.className = 'client-details';
+  const details = document.createElement('div'); details.className='client-details';
   details.innerHTML = clientDetailsHtml(client);
 
-  // copiar whatsapp
+  // copy whatsapp
   wa.querySelector('.copy-btn').addEventListener('click', (e) => {
     navigator.clipboard?.writeText(client.whatsapp || '')?.then(()=> {
       e.target.textContent = '✔';
@@ -318,7 +268,7 @@ function clientRow(client){
     });
   });
 
-  // bloquear (no detalhe)
+  // block button inside details
   const blockBtn = details.querySelector('.block-client');
   blockBtn.addEventListener('click', ()=> {
     if (!confirm(`Bloquear cliente ${client.nome}? Isso define bloqueado = true.`)) return;
@@ -356,9 +306,7 @@ function clientDetailsHtml(client){
   `;
 }
 
-/* -------------------------
-   NOTIFICAR cliente => simulação
-*/
+/* NOTIFY (simulado) */
 function notifyClient(clientId){
   const c = DB.clientes.find(x=>x.id===clientId);
   if (!c) return;
@@ -368,13 +316,10 @@ function notifyClient(clientId){
   alert(`Notificação simulada para ${c.nome} (${c.whatsapp}).`);
 }
 
-/* -------------------------
-   RENOVAÇÃO
-*/
+/* RENOVAR */
 function openRenewModal(clientId){
   const client = DB.clientes.find(c=>c.id===clientId);
-  if (!client) return;
-  openModal(buildRenewForm(client));
+  if (!client) return; openModal(buildRenewForm(client));
 }
 function buildRenewForm(client){
   const div = document.createElement('div');
@@ -389,47 +334,27 @@ function buildRenewForm(client){
     </div>
   `;
   const sel = form.querySelector('select[name=planoId]');
-  DB.planos.forEach(p => {
-    const o = document.createElement('option');
-    o.value = p.id; o.textContent = `${p.nome} — ${p.validade} mês(es)`;
-    if (p.id === client.planoId) o.selected = true;
-    sel.appendChild(o);
-  });
+  DB.planos.forEach(p => { const o = document.createElement('option'); o.value = p.id; o.textContent = `${p.nome} — ${p.validade} mês(es)`; if (p.id===client.planoId) o.selected=true; sel.appendChild(o); });
   const dateIn = form.querySelector('input[name=dataVencimento]');
   const selectedPlan = DB.planos.find(p=>p.id===sel.value);
   dateIn.value = addMonths(client.dataVencimento || fmtDate(new Date()), selectedPlan ? selectedPlan.validade : 1);
-  sel.addEventListener('change', ()=> {
-    const p = DB.planos.find(x=>x.id===sel.value);
-    dateIn.value = p ? addMonths(client.dataVencimento || fmtDate(new Date()), p.validade) : dateIn.value;
-  });
+  sel.addEventListener('change', ()=> { const p = DB.planos.find(x=>x.id===sel.value); dateIn.value = p ? addMonths(client.dataVencimento || fmtDate(new Date()), p.validade) : dateIn.value; });
   form.querySelector('#cancelRenew').addEventListener('click', closeModal);
-  form.addEventListener('submit', (e)=>{
-    e.preventDefault();
-    const planId = sel.value;
-    const newDate = dateIn.value;
-    client.planoId = planId;
-    client.dataVencimento = newDate;
-    client.numeroRenovacoes = (client.numeroRenovacoes || 0) + 1;
-    saveState(DB);
-    closeModal();
-    renderAll();
-    alert(`Cliente ${client.nome} renovado até ${newDate}.`);
-  });
+  form.addEventListener('submit', (e)=>{ e.preventDefault(); client.planoId = sel.value; client.dataVencimento = dateIn.value; client.numeroRenovacoes = (client.numeroRenovacoes||0)+1; saveState(DB); closeModal(); renderAll(); alert(`Cliente ${client.nome} renovado até ${client.dataVencimento}.`); });
   div.appendChild(form);
   return div;
 }
 
-/* -------------------------
-   EDITAR CLIENTE
-*/
+/* EDIT CLIENT - usa modal com formulário responsivo */
 function openEditClient(clientId, rowNode){
-  const client = DB.clientes.find(c=>c.id===clientId);
-  if (!client) return;
+  const client = DB.clientes.find(c=>c.id===clientId); if (!client) return;
   const tpl = qs('#clientFormTpl').content.cloneNode(true);
   const form = tpl.querySelector('form');
   tpl.querySelector('#clientFormTitle').textContent = `Editar ${client.nome}`;
+
   const planoSel = form.querySelector('select[name=planoId]');
   DB.planos.forEach(p => { const o = document.createElement('option'); o.value = p.id; o.textContent = p.nome; if (p.id===client.planoId) o.selected=true; planoSel.appendChild(o); });
+
   const srv1 = form.querySelector('select[name=servidor1]'); const srv2 = form.querySelector('select[name=servidor2]');
   const emptyOpt = document.createElement('option'); emptyOpt.value=''; emptyOpt.textContent='—';
   srv1.appendChild(emptyOpt.cloneNode(true)); srv2.appendChild(emptyOpt.cloneNode(true));
@@ -450,9 +375,7 @@ function openEditClient(clientId, rowNode){
   fields.namedItem('numeroRenovacoes').value = client.numeroRenovacoes || 0;
 
   form.querySelector('#cancelClient').addEventListener('click', closeModal);
-  form.addEventListener('submit', (e)=>{
-    e.preventDefault();
-    if (!confirm('Salvar alterações do cliente?')) return;
+  form.addEventListener('submit', (e)=>{ e.preventDefault(); if (!confirm('Salvar alterações do cliente?')) return;
     client.nome = fields.namedItem('nome').value;
     client.whatsapp = fields.namedItem('whatsapp').value;
     client.email = fields.namedItem('email').value;
@@ -468,17 +391,13 @@ function openEditClient(clientId, rowNode){
     client.observacoes = fields.namedItem('observacoes').value;
     client.codigoIndicacao = fields.namedItem('codigoIndicacao').value;
     client.numeroRenovacoes = parseInt(fields.namedItem('numeroRenovacoes').value || 0);
-    saveState(DB);
-    closeModal();
-    renderAll();
+    saveState(DB); closeModal(); renderAll();
   });
 
   openModal(tpl);
 }
 
-/* -------------------------
-   CADASTRAR NOVO CLIENTE
-*/
+/* NEW CLIENT */
 qs('#btnNewClient').addEventListener('click', ()=> {
   const tpl = qs('#clientFormTpl').content.cloneNode(true);
   const form = tpl.querySelector('form');
@@ -491,8 +410,7 @@ qs('#btnNewClient').addEventListener('click', ()=> {
   DB.servidores.forEach(s => { const o=document.createElement('option'); o.value=s.id; o.textContent=s.nome; srv1.appendChild(o); srv2.appendChild(o.cloneNode(true)); });
 
   form.querySelector('#cancelClient').addEventListener('click', closeModal);
-  form.addEventListener('submit', (e)=>{
-    e.preventDefault();
+  form.addEventListener('submit', (e)=>{ e.preventDefault();
     const f = form.elements;
     const newClient = {
       id: 'c' + uid(),
@@ -514,18 +432,13 @@ qs('#btnNewClient').addEventListener('click', ()=> {
       numeroRenovacoes: parseInt(f.namedItem('numeroRenovacoes').value || 0),
       bloqueado: false,
     };
-    DB.clientes.push(newClient);
-    saveState(DB);
-    closeModal();
-    renderAll();
+    DB.clientes.push(newClient); saveState(DB); closeModal(); renderAll();
   });
 
   openModal(tpl);
 });
 
-/* -------------------------
-   PLANOS: listagem, criar, editar
-*/
+/* PLANOS */
 function renderPlansList(){
   const container = qs('#plansList'); if (!container) return;
   container.innerHTML = '';
@@ -544,64 +457,25 @@ function renderPlansList(){
 
 qs('#btnNewPlan').addEventListener('click', ()=> {
   const tpl = qs('#planFormTpl').content.cloneNode(true);
-  const form = tpl.querySelector('form');
-  form.querySelector('#cancelPlan').addEventListener('click', closeModal);
-  form.addEventListener('submit', (e)=>{
-    e.preventDefault();
-    const f = form.elements;
-    const newP = {
-      id: 'p' + uid(),
-      nome: f.namedItem('nome').value,
-      pontos: parseInt(f.namedItem('pontos').value||0),
-      valor: parseFloat(f.namedItem('valor').value||0),
-      validade: parseInt(f.namedItem('validade').value||1),
-      linkCartao: f.namedItem('linkCartao').value||'',
-      chavePIX: f.namedItem('chavePIX').value||'',
-    };
-    DB.planos.push(newP);
-    saveState(DB);
-    closeModal();
-    renderPlansList();
-    renderClientsList();
+  const form = tpl.querySelector('form'); form.querySelector('#cancelPlan').addEventListener('click', closeModal);
+  form.addEventListener('submit', (e)=>{ e.preventDefault();
+    const f = form.elements; const newP = { id: 'p' + uid(), nome: f.namedItem('nome').value, pontos: parseInt(f.namedItem('pontos').value||0), valor: parseFloat(f.namedItem('valor').value||0), validade: parseInt(f.namedItem('validade').value||1), linkCartao: f.namedItem('linkCartao').value||'', chavePIX: f.namedItem('chavePIX').value||'' };
+    DB.planos.push(newP); saveState(DB); closeModal(); renderPlansList(); renderClientsList();
   });
-  openModal(tpl);
 });
 
 function openEditPlan(planId){
   const plan = DB.planos.find(p=>p.id===planId); if (!plan) return;
-  const tpl = qs('#planFormTpl').content.cloneNode(true);
-  const form = tpl.querySelector('form');
-  const f = form.elements;
-  f.namedItem('nome').value = plan.nome;
-  f.namedItem('pontos').value = plan.pontos;
-  f.namedItem('valor').value = plan.valor;
-  f.namedItem('validade').value = plan.validade;
-  f.namedItem('linkCartao').value = plan.linkCartao;
-  f.namedItem('chavePIX').value = plan.chavePIX;
+  const tpl = qs('#planFormTpl').content.cloneNode(true); const form = tpl.querySelector('form');
+  const f = form.elements; f.namedItem('nome').value = plan.nome; f.namedItem('pontos').value = plan.pontos; f.namedItem('valor').value = plan.valor; f.namedItem('validade').value = plan.validade; f.namedItem('linkCartao').value = plan.linkCartao; f.namedItem('chavePIX').value = plan.chavePIX;
   form.querySelector('#cancelPlan').addEventListener('click', closeModal);
-  form.addEventListener('submit', (e)=>{
-    e.preventDefault();
-    if (!confirm('Salvar alterações do plano?')) return;
-    plan.nome = f.namedItem('nome').value;
-    plan.pontos = parseInt(f.namedItem('pontos').value||0);
-    plan.valor = parseFloat(f.namedItem('valor').value||0);
-    plan.validade = parseInt(f.namedItem('validade').value||1);
-    plan.linkCartao = f.namedItem('linkCartao').value||'';
-    plan.chavePIX = f.namedItem('chavePIX').value||'';
-    saveState(DB);
-    closeModal();
-    renderPlansList();
-    renderClientsList();
-  });
+  form.addEventListener('submit', (e)=>{ e.preventDefault(); if (!confirm('Salvar alterações do plano?')) return; plan.nome = f.namedItem('nome').value; plan.pontos = parseInt(f.namedItem('pontos').value||0); plan.valor = parseFloat(f.namedItem('valor').value||0); plan.validade = parseInt(f.namedItem('validade').value||1); plan.linkCartao = f.namedItem('linkCartao').value||''; plan.chavePIX = f.namedItem('chavePIX').value||''; saveState(DB); closeModal(); renderPlansList(); renderClientsList(); });
   openModal(tpl);
 }
 
-/* -------------------------
-   SERVIDORES: listagem, criar, editar
-*/
+/* SERVIDORES */
 function renderServersList(){
-  const container = qs('#serversList'); if (!container) return;
-  container.innerHTML = '';
+  const container = qs('#serversList'); if (!container) return; container.innerHTML = '';
   DB.servidores.forEach(s => {
     const row = document.createElement('div'); row.className='item-row';
     const col = document.createElement('div'); col.className='item-col';
@@ -617,86 +491,31 @@ function renderServersList(){
 
 qs('#btnNewServer').addEventListener('click', ()=> {
   const tpl = qs('#serverFormTpl').content.cloneNode(true);
-  const form = tpl.querySelector('form');
-  form.querySelector('#cancelServer').addEventListener('click', closeModal);
-  form.addEventListener('submit', (e)=>{
-    e.preventDefault();
-    const f = form.elements;
-    const newS = {
-      id: 's' + uid(),
-      nome: f.namedItem('nome').value,
-      url1: f.namedItem('url1').value||'',
-      url2: f.namedItem('url2').value||'',
-      app1: f.namedItem('app1').value||'',
-      app2: f.namedItem('app2').value||'',
-    };
-    DB.servidores.push(newS);
-    saveState(DB);
-    closeModal();
-    renderServersList();
-    renderClientsList();
-  });
+  const form = tpl.querySelector('form'); form.querySelector('#cancelServer').addEventListener('click', closeModal);
+  form.addEventListener('submit', (e)=>{ e.preventDefault(); const f = form.elements; const newS = { id: 's' + uid(), nome: f.namedItem('nome').value, url1: f.namedItem('url1').value||'', url2: f.namedItem('url2').value||'', app1: f.namedItem('app1').value||'', app2: f.namedItem('app2').value||'' }; DB.servidores.push(newS); saveState(DB); closeModal(); renderServersList(); renderClientsList(); });
   openModal(tpl);
 });
 
 function openEditServer(serverId){
-  const s = DB.servidores.find(x=>x.id===serverId); if (!s) return;
-  const tpl = qs('#serverFormTpl').content.cloneNode(true);
-  const form = tpl.querySelector('form');
-  const f = form.elements;
-  f.namedItem('nome').value = s.nome;
-  f.namedItem('url1').value = s.url1;
-  f.namedItem('url2').value = s.url2;
-  f.namedItem('app1').value = s.app1;
-  f.namedItem('app2').value = s.app2;
-  form.querySelector('#cancelServer').addEventListener('click', closeModal);
-  form.addEventListener('submit', (e)=>{
-    e.preventDefault();
-    if (!confirm('Salvar alterações do servidor?')) return;
-    s.nome = f.namedItem('nome').value;
-    s.url1 = f.namedItem('url1').value;
-    s.url2 = f.namedItem('url2').value;
-    s.app1 = f.namedItem('app1').value;
-    s.app2 = f.namedItem('app2').value;
-    saveState(DB);
-    closeModal();
-    renderServersList();
-    renderClientsList();
-  });
-  openModal(tpl);
+  const s = DB.servidores.find(x=>x.id===serverId); if (!s) return; const tpl = qs('#serverFormTpl').content.cloneNode(true); const form = tpl.querySelector('form'); const f = form.elements; f.namedItem('nome').value = s.nome; f.namedItem('url1').value = s.url1; f.namedItem('url2').value = s.url2; f.namedItem('app1').value = s.app1; f.namedItem('app2').value = s.app2; form.querySelector('#cancelServer').addEventListener('click', closeModal); form.addEventListener('submit', (e)=>{ e.preventDefault(); if (!confirm('Salvar alterações do servidor?')) return; s.nome = f.namedItem('nome').value; s.url1 = f.namedItem('url1').value; s.url2 = f.namedItem('url2').value; s.app1 = f.namedItem('app1').value; s.app2 = f.namedItem('app2').value; saveState(DB); closeModal(); renderServersList(); renderClientsList(); }); openModal(tpl);
 }
 
-/* -------------------------
-   MODAL UTIL
-*/
+/* MODAL UTIL */
 function openModal(content){
-  const modal = qs('#modal');
-  const panel = qs('#modalContent');
-  panel.innerHTML = '';
-  if (content instanceof DocumentFragment || content instanceof Node) panel.appendChild(content);
-  else panel.innerHTML = content;
+  const modal = qs('#modal'); const panel = qs('#modalContent'); panel.innerHTML = '';
+  if (content instanceof DocumentFragment || content instanceof Node) panel.appendChild(content); else panel.innerHTML = content;
   modal.classList.remove('hidden'); modal.setAttribute('aria-hidden','false');
 }
-function closeModal(){
-  const modal = qs('#modal');
-  modal.classList.add('hidden'); modal.setAttribute('aria-hidden','true');
-  qs('#modalContent').innerHTML = '';
-}
+function closeModal(){ const modal = qs('#modal'); modal.classList.add('hidden'); modal.setAttribute('aria-hidden','true'); qs('#modalContent').innerHTML = ''; }
 qs('#modalClose').addEventListener('click', closeModal);
 qs('#modal').addEventListener('click', (e)=> { if (e.target === qs('#modal')) closeModal(); });
 
-/* -------------------------
-   UI: busca toggle e bind
-*/
+/* UI: search / toggle */
 function bindGlobalUI(){
-  const search = qs('#searchInput');
-  if (search) search.addEventListener('input', ()=> { state.filter.text = qs('#searchInput').value; renderClientsList(); });
-  const toggle = qs('#onlyNotifiedToggle');
-  if (toggle) toggle.addEventListener('change', ()=> { state.filter.onlyNotified = qs('#onlyNotifiedToggle').checked; renderClientsList(); });
+  const search = qs('#searchInput'); if (search) search.addEventListener('input', ()=> { state.filter.text = qs('#searchInput').value; renderClientsList(); });
+  const toggle = qs('#onlyNotifiedToggle'); if (toggle) toggle.addEventListener('change', ()=> { state.filter.onlyNotified = qs('#onlyNotifiedToggle').checked; renderClientsList(); });
   document.addEventListener('keydown', (e)=> { if (e.key === 'Escape') closeModal(); });
 }
 
-/* -------------------------
-   Inicializa app
-*/
+/* START */
 init();
