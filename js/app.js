@@ -1,43 +1,43 @@
-/* js/app.js - loader e shell (corrigido)
-   - Garante que, após injetar HTML de uma view, a função de inicialização específica seja chamada
-   - Mesmo que o script da view já esteja presente no documento, chamamos init<View>()
-   - Resolve corretamente paths que começam com "js/" usando a base do documento (index), evitando prefixo "views/"
-*/
-
 const CONTENT = document.getElementById('content');
 const STORAGE_KEY = 'pandda_simple_v2';
 
+/* Usa dados mock externos se não houver dados salvos */
 function defaultData(){
-  const planos = [
-    { id:'p1', nome:'Básico', pontos:10, valor:29.9, validade:1 },
-    { id:'p2', nome:'Pro', pontos:30, valor:69.9, validade:3 },
-    { id:'p3', nome:'Anual', pontos:120, valor:199.9, validade:12 },
-  ];
-  const servidores = [
-    { id:'s1', nome:'Servidor Alpha', url1:'https://alpha.example' },
-    { id:'s2', nome:'Servidor Beta', url1:'https://beta.example' },
-    { id:'s3', nome:'Servidor Gamma', url1:'https://gamma.example' },
-  ];
-  const base = new Date();
-  const clients = [
-    { id:'c1', nome:'Ana Silva', whatsapp:'+5591988887777', dataCriacao:'', dataVencimento:new Date(base.getFullYear(), base.getMonth()+1, base.getDate()).toISOString().slice(0,10), planoId:'p1', servidor1:'s1', statusNotificacao:true, observacoes:'VIP', bloqueado:false},
-    { id:'c2', nome:'Bruno Costa', whatsapp:'+5591999991111', dataCriacao:'', dataVencimento:new Date(base.getTime()+1000*60*60*24*3).toISOString().slice(0,10), planoId:'p2', servidor1:'s2', statusNotificacao:false, observacoes:'', bloqueado:false},
-    { id:'c3', nome:'Carla Nunes', whatsapp:'+5591983332222', dataCriacao:'', dataVencimento:new Date(base.getTime()-1000*60*60*24*2).toISOString().slice(0,10), planoId:'p1', servidor1:'s3', statusNotificacao:false, observacoes:'', bloqueado:false},
-  ];
-  return { planos, servidores, clientes: clients };
+  return window.MockData || { planos: [], servidores: [], clientes: [] };
 }
-function loadState(){ const raw = localStorage.getItem(STORAGE_KEY); if (!raw) { const d = defaultData(); saveState(d); return d; } try { return JSON.parse(raw); } catch(e){ const d=defaultData(); saveState(d); return d; } }
-function saveState(s){ localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
+function loadState(){
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) {
+    const d = defaultData();
+    saveState(d);
+    return d;
+  }
+  try {
+    return JSON.parse(raw);
+  } catch(e){
+    const d = defaultData();
+    saveState(d);
+    return d;
+  }
+}
+function saveState(s){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+}
 
 window.DB = loadState();
 
-function normalizeUrl(base, relative){ try { return new URL(relative, base).toString(); } catch(e){ return relative; } }
+/* Utilitários de carregamento */
+function normalizeUrl(base, relative){
+  try {
+    return new URL(relative, base).toString();
+  } catch(e){
+    return relative;
+  }
+}
 function loadScriptAbsolute(src){
   return new Promise((resolve,reject)=>{
-    // if script already present, resolve immediately (we will still call init)
     const exists = Array.from(document.scripts).some(s=>s.src === src);
     if (exists) return resolve(src);
-
     const s = document.createElement('script');
     s.src = src;
     s.async = false;
@@ -59,7 +59,22 @@ function loadCssAbsolute(href){
   });
 }
 
-/* Extract simple view name from path: views/clientes.html -> clientes */
+/* Corrige caminhos de assets */
+function resolveAssetUrl(baseUrl, assetPath){
+  if (!assetPath) return assetPath;
+  if (/^(https?:)?\/\//i.test(assetPath)) return assetPath;
+  if (assetPath.startsWith('/')) {
+    return new URL(assetPath, window.location.origin).toString();
+  }
+  if (/^(\.\/|\.\.\/)?js\//.test(assetPath)) {
+    const clean = assetPath.replace(/^(\.\/|\.\.\/)/, '');
+    const appBase = new URL('.', window.location.href).toString();
+    return new URL(clean, appBase).toString();
+  }
+  return new URL(assetPath, baseUrl).toString();
+}
+
+/* Nome da view a partir do caminho */
 function viewNameFromPath(path){
   try {
     return path.split('/').pop().split('.').shift();
@@ -68,11 +83,7 @@ function viewNameFromPath(path){
   }
 }
 
-/* Call the init function for a view:
-   priority:
-   - global function named init<CapitalizedView>() e.g. initClientes
-   - window.viewInit (fallback, view can set this)
-*/
+/* Chama função init da view */
 function callViewInit(view){
   if (!view) return;
   const cap = view.charAt(0).toUpperCase() + view.slice(1);
@@ -86,44 +97,12 @@ function callViewInit(view){
       window.viewInit();
       return;
     }
-    // no init found — fine
   } catch(e){
     console.error('Erro ao executar init da view', fn, e);
   }
 }
 
-/* Resolve asset URL with robust rules:
-   - absolute urls (http(s):// or //) returned as-is
-   - root-relative (/...) resolved from site origin (preserves repository base)
-   - paths starting with js/ or ./js/ or ../js/ are treated as relative to the document/app base
-     (not relative to views/<name>.html). This avoids producing views/js/...
-   - otherwise resolved relative to the view's baseUrl
-*/
-function resolveAssetUrl(baseUrl, assetPath){
-  if (!assetPath) return assetPath;
-
-  // absolute URL (http/https or protocol-relative)
-  if (/^(https?:)?\/\//i.test(assetPath)) return assetPath;
-
-  // root-relative path (starts with '/') -> keep relative to origin (preserves /pandda base if present)
-  if (assetPath.startsWith('/')) {
-    // new URL with origin + assetPath preserves any repo prefix on the server
-    return new URL(assetPath, window.location.origin).toString();
-  }
-
-  // treat js/ (and ./js/ ../js/) as relative to the document/app base (not the view)
-  if (/^(\.\/|\.\.\/)?js\//.test(assetPath)) {
-    // compute base that points to the directory that served the main index (document base)
-    // new URL('.', window.location.href) gives the directory of the current URL (index.html location)
-    const appBase = new URL('.', window.location.href).toString();
-    return normalizeUrl(appBase, assetPath.replace(/^\.\//, ''));
-  }
-
-  // otherwise resolve relative to the view's base URL
-  return normalizeUrl(baseUrl, assetPath);
-}
-
-/* loadView: load html, css, scripts; inject and then call init function */
+/* Carrega view HTML + assets + init */
 async function loadView(path){
   if (!CONTENT) throw new Error('#content não encontrado');
   try {
@@ -136,7 +115,6 @@ async function loadView(path){
 
     const baseUrl = new URL(path, window.location.href).toString();
 
-    // links and scripts inside view
     const links = Array.from(temp.querySelectorAll('link[rel="stylesheet"]'));
     const cssPromises = links.map(l => {
       const href = l.getAttribute('href');
@@ -153,24 +131,17 @@ async function loadView(path){
       return abs;
     });
 
-    // inject HTML
     CONTENT.innerHTML = temp.innerHTML;
-
-    // wait CSS
     await Promise.all(cssPromises);
 
-    // load scripts sequentially (if not loaded), but even if loaded we will call init after
     for (const s of scriptSrcs){
       await loadScriptAbsolute(s).catch(err => {
         console.warn('Falha ao carregar script da view:', s, err);
       });
     }
 
-    // ensure init is always called (fixes "click same menu and handlers missing")
     const view = viewNameFromPath(path);
-    // small delay to ensure any inline script executed
     setTimeout(()=> callViewInit(view), 0);
-
     return;
   } catch(err){
     CONTENT.innerHTML = `<div style="padding:20px;color:#500;background:#fff7f7;border-radius:8px">Erro ao carregar a view: ${err.message || err}</div>`;
@@ -178,7 +149,7 @@ async function loadView(path){
   }
 }
 
-/* Sidebar injection and bindings (same behavior: injected only after login) */
+/* Sidebar */
 function injectSidebar(){
   if (document.getElementById('sidebar')) return;
   const aside = document.createElement('aside');
@@ -197,7 +168,6 @@ function injectSidebar(){
   document.body.insertBefore(aside, document.getElementById('app'));
   bindSidebar();
   showTopbarAndShiftContent();
-  // ensure default view (clientes) loaded after injection
   loadView('views/clientes.html').catch(e => console.error(e));
 }
 
@@ -210,7 +180,6 @@ function bindSidebar(){
       } catch(e){
         console.error('Erro ao carregar view via sidebar:', e);
       }
-      // mobile: close overlay
       const sb = document.getElementById('sidebar');
       if (sb && window.matchMedia('(max-width:880px)').matches) sb.classList.remove('open');
     });
@@ -224,7 +193,7 @@ function bindSidebar(){
   });
 }
 
-/* Topbar and content helpers */
+/* Topbar helpers */
 function showTopbarAndShiftContent(){
   const topbar = document.getElementById('topbar');
   if (topbar) topbar.classList.remove('hidden');
@@ -247,27 +216,55 @@ function bindTopbarToggle(){
   const newTb = tb.cloneNode(true);
   tb.parentNode.replaceChild(newTb, tb);
   newTb.addEventListener('click', ()=>{
-    const sb = document.getElementById('sidebar'); if (!sb) return;
-    if (window.matchMedia('(max-width:880px)').matches) sb.classList.toggle('open');
-    else {
+    const sb = document.getElementById('sidebar');
+    if (!sb) return;
+    if (window.matchMedia('(max-width:880px)').matches) {
+      sb.classList.toggle('open');
+    } else {
       sb.classList.toggle('collapsed');
       const contentRoot = document.getElementById('content');
       if (contentRoot) {
-        if (sb.classList.contains('collapsed')) contentRoot.classList.add('collapsed'); else contentRoot.classList.remove('collapsed');
+        if (sb.classList.contains('collapsed')) {
+          contentRoot.classList.add('collapsed');
+        } else {
+          contentRoot.classList.remove('collapsed');
+        }
       }
     }
   });
 }
 
-/* modal */
-function openModal(content){ const modal = document.getElementById('modal'), panel = document.getElementById('modalContent'); if(!modal||!panel) return; panel.innerHTML=''; if(content instanceof Node) panel.appendChild(content); else panel.innerHTML = String(content); modal.classList.remove('hidden'); }
-function closeModal(){ const modal=document.getElementById('modal'); if(!modal) return; modal.classList.add('hidden'); document.getElementById('modalContent').innerHTML=''; }
+/* Modal */
+function openModal(content){
+  const modal = document.getElementById('modal');
+  const panel = document.getElementById('modalContent');
+  if (!modal || !panel) return;
+  panel.innerHTML = '';
+  if (content instanceof Node) {
+    panel.appendChild(content);
+  } else {
+    panel.innerHTML = String(content);
+  }
+  modal.classList.remove('hidden');
+}
+function closeModal(){
+  const modal = document.getElementById('modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  document.getElementById('modalContent').innerHTML = '';
+}
 document.getElementById('modalClose')?.addEventListener('click', closeModal);
-document.getElementById('modal')?.addEventListener('click',(e)=> { if(e.target === document.getElementById('modal')) closeModal(); });
+document.getElementById('modal')?.addEventListener('click', (e) => {
+  if (e.target === document.getElementById('modal')) closeModal();
+});
 
 /* start: load login */
 (async function start(){
-  try { await loadView('views/login.html'); } catch(e){ console.error('Falha ao carregar view inicial:', e); }
+  try {
+    await loadView('views/login.html');
+  } catch(e){
+    console.error('Falha ao carregar view inicial:', e);
+  }
 })();
 
 /* expose API */
@@ -276,6 +273,6 @@ window.app = {
   loadView,
   openModal,
   closeModal,
-  saveState: ()=> saveState(window.DB),
-  getDB: ()=> window.DB
+  saveState: () => saveState(window.DB),
+  getDB: () => window.DB
 };
