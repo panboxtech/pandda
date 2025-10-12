@@ -4,7 +4,7 @@
    - Ao notificar: seta statusNotificacao = true e salva (window.app.saveState)
    - Renovação: calcula nova data somando a validade (meses) do plano; plano atual selecionado por padrão;
      ao trocar plano, atualiza data em tempo real; mostra nome e usuario1 na modal.
-   - Renovação agora tem 3 ações: Cancelar, Salvar, Salvar e Notificar (salva, confirma salvamento, depois envia)
+   - Renovação agora tem 3 ações: Cancelar, Salvar, Salvar e Notificar (salva, confirma salvamento, espera 2s, depois envia)
    - Simula confirmação de renovação (marca flag e timestamp no objeto cliente e persiste em localStorage)
 */
 
@@ -170,7 +170,7 @@ function initClientes(){
     out.forEach(c => cont.appendChild(makeRow(c)));
   }
 
-  // Renovação: agora com "Salvar" e "Salvar e Notificar" (feedback de salvo antes de enviar)
+  // Renovação: agora com "Salvar" and "Salvar e Notificar" (com espera de 2s após confirmação)
   function openRenew(client){
     const form = document.createElement('form'); form.className='form';
     const currentPlan = DB.planos.find(p => p.id === client.planoId) || null;
@@ -228,12 +228,12 @@ function initClientes(){
       alert(`Cliente ${client.nome} renovado até ${form.elements.namedItem('dataVencimento').value}. Renovação salva (simulada).`);
     });
 
-    // botão "Salvar e Notificar": salva, mostra confirmação, depois envia mensagem
+    // botão "Salvar e Notificar": salva, mostra confirmação, espera 2s, depois envia mensagem
     form.querySelector('#saveNotifyRenew')?.addEventListener('click', (e)=>{
       // salvar primeiro
       saveRenewal();
       // feedback imediato de salvamento
-      alert(`Renovação salva para ${client.nome}. Agora abrindo WhatsApp para notificar o cliente.`);
+      alert(`Renovação salva para ${client.nome}. Aguardando 2 segundos antes de abrir o WhatsApp para notificação.`);
       // montar mensagem de confirmação da renovação
       const plan = DB.planos.find(p => p.id === client.planoId) || null;
       const planName = plan ? plan.nome : '—';
@@ -250,14 +250,17 @@ function initClientes(){
       const msg = encodeURIComponent(lines.join('\n'));
       const raw = client.whatsapp || '';
       const num = raw.replace(/\D/g,'');
-      if (num) {
-        const href = `https://wa.me/${num}?text=${msg}`;
-        const win = window.open(href, '_blank');
-        if (!win) window.location.href = href;
-      } else {
-        alert('Número de WhatsApp inválido para este cliente.');
-      }
-      window.app.closeModal();
+      // esperar 2 segundos antes de abrir link
+      setTimeout(()=> {
+        if (num) {
+          const href = `https://wa.me/${num}?text=${msg}`;
+          const win = window.open(href, '_blank');
+          if (!win) window.location.href = href;
+        } else {
+          alert('Número de WhatsApp inválido para este cliente.');
+        }
+        window.app.closeModal();
+      }, 2000);
     });
 
     window.app.openModal(form);
