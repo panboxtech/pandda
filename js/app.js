@@ -1,7 +1,7 @@
 /* js/app.js - loader e shell (corrigido)
    - Garante que, após injetar HTML de uma view, a função de inicialização específica seja chamada
    - Mesmo que o script da view já esteja presente no documento, chamamos init<View>()
-   - Corrige resolução de assets: paths que começam com js/ são tratados como relativos à raiz do site
+   - Resolve corretamente paths que começam com "js/" usando a base do documento (index), evitando prefixo "views/"
 */
 
 const CONTENT = document.getElementById('content');
@@ -92,23 +92,33 @@ function callViewInit(view){
   }
 }
 
-/* Resolve asset URL with special-case rules:
+/* Resolve asset URL with robust rules:
    - absolute urls (http(s):// or //) returned as-is
-   - root-relative (/...) resolved from site origin
-   - paths starting with js/ or ./js/ or ../js/ are treated as site-root relative (/js/...)
+   - root-relative (/...) resolved from site origin (preserves repository base)
+   - paths starting with js/ or ./js/ or ../js/ are treated as relative to the document/app base
+     (not relative to views/<name>.html). This avoids producing views/js/...
    - otherwise resolved relative to the view's baseUrl
 */
 function resolveAssetUrl(baseUrl, assetPath){
   if (!assetPath) return assetPath;
+
   // absolute URL (http/https or protocol-relative)
   if (/^(https?:)?\/\//i.test(assetPath)) return assetPath;
-  // root-relative path (starts with '/')
-  if (assetPath.startsWith('/')) return normalizeUrl(window.location.origin + '/', assetPath);
-  // treat js/ (and ./js/ ../js/) as root-relative to site (avoid prefixing with views/)
-  if (/^(\.\/|\.\.\/)?js\//.test(assetPath)) {
-    const clean = assetPath.replace(/^\.\//, '').replace(/^\.\.\//, '').replace(/^\/+/, '');
-    return normalizeUrl(window.location.origin + '/', clean);
+
+  // root-relative path (starts with '/') -> keep relative to origin (preserves /pandda base if present)
+  if (assetPath.startsWith('/')) {
+    // new URL with origin + assetPath preserves any repo prefix on the server
+    return new URL(assetPath, window.location.origin).toString();
   }
+
+  // treat js/ (and ./js/ ../js/) as relative to the document/app base (not the view)
+  if (/^(\.\/|\.\.\/)?js\//.test(assetPath)) {
+    // compute base that points to the directory that served the main index (document base)
+    // new URL('.', window.location.href) gives the directory of the current URL (index.html location)
+    const appBase = new URL('.', window.location.href).toString();
+    return normalizeUrl(appBase, assetPath.replace(/^\.\//, ''));
+  }
+
   // otherwise resolve relative to the view's base URL
   return normalizeUrl(baseUrl, assetPath);
 }
