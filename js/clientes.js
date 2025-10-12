@@ -4,8 +4,7 @@
    - Ao notificar: seta statusNotificacao = true e salva (window.app.saveState)
    - Renovação: calcula nova data somando a validade (meses) do plano; plano atual selecionado por padrão;
      ao trocar plano, atualiza data em tempo real; mostra nome e usuario1 na modal.
-   - Renovação agora tem 3 ações: Cancelar, Salvar, Salvar e Notificar (salva, confirma salvamento, espera 2s, depois envia)
-   - Simula confirmação de renovação (marca flag e timestamp no objeto cliente e persiste em localStorage)
+   - Renovação: "Salvar" e "Salvar e Notificar" usam feedback não bloqueante (toast) e abrem o link em nova aba.
 */
 
 function initClientes(){
@@ -13,6 +12,55 @@ function initClientes(){
   const cont = document.getElementById('clientsList');
   const summary = document.getElementById('summaryCards');
 
+  /* -------------------------
+     Helpers UI: toast (feedback não bloqueante)
+     ------------------------- */
+  function ensureToastContainer(){
+    let c = document.getElementById('toastContainer');
+    if (!c) {
+      c = document.createElement('div');
+      c.id = 'toastContainer';
+      c.style.position = 'fixed';
+      c.style.right = '16px';
+      c.style.bottom = '16px';
+      c.style.zIndex = '1000';
+      c.style.display = 'flex';
+      c.style.flexDirection = 'column';
+      c.style.gap = '8px';
+      document.body.appendChild(c);
+    }
+    return c;
+  }
+  function showToast(message, ms = 2000){
+    const cont = ensureToastContainer();
+    const t = document.createElement('div');
+    t.textContent = message;
+    t.style.background = '#222';
+    t.style.color = '#fff';
+    t.style.padding = '10px 14px';
+    t.style.borderRadius = '8px';
+    t.style.boxShadow = '0 6px 18px rgba(0,0,0,0.15)';
+    t.style.fontSize = '14px';
+    t.style.opacity = '0';
+    t.style.transition = 'opacity .18s ease, transform .18s ease';
+    t.style.transform = 'translateY(8px)';
+    cont.appendChild(t);
+    requestAnimationFrame(()=> {
+      t.style.opacity = '1';
+      t.style.transform = 'translateY(0)';
+    });
+    return new Promise(resolve => {
+      setTimeout(()=> {
+        t.style.opacity = '0';
+        t.style.transform = 'translateY(8px)';
+        setTimeout(()=> { t.remove(); resolve(); }, 180);
+      }, ms);
+    });
+  }
+
+  /* -------------------------
+     Data/time helpers
+     ------------------------- */
   function fmtDate(d){ if(!d) return ''; try{ return new Date(d).toISOString().slice(0,10); }catch(e){return d;} }
 
   function addMonthsToDate(dateStr, months){
@@ -86,6 +134,9 @@ function initClientes(){
     return `https://wa.me/${num}?text=${msg}`;
   }
 
+  /* -------------------------
+     Rows / rendering
+     ------------------------- */
   function makeRow(c){
     const row = document.createElement('div'); row.className = 'client-row';
     row.innerHTML = `
@@ -136,10 +187,21 @@ function initClientes(){
       window.app.saveState();
       updateNotifyBtnLabel();
       if (href) {
-        const win = window.open(href, '_blank');
-        if (!win) window.location.href = href;
+        // abrir sempre em nova aba
+        const w = window.open(href, '_blank', 'noopener,noreferrer');
+        if (!w) {
+          // popup bloqueado: tentar abrir em nova aba via href assignment em alvo e foco
+          const a = document.createElement('a');
+          a.href = href;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        }
       } else {
-        alert('Número de WhatsApp inválido para este cliente.');
+        showToast('Número de WhatsApp inválido para este cliente.', 2500);
       }
     });
 
@@ -170,7 +232,9 @@ function initClientes(){
     out.forEach(c => cont.appendChild(makeRow(c)));
   }
 
-  // Renovação: agora com "Salvar" and "Salvar e Notificar" (com espera de 2s após confirmação)
+  /* -------------------------
+     Renovação: "Salvar" e "Salvar e Notificar" (feedback não bloqueante e nova aba)
+     ------------------------- */
   function openRenew(client){
     const form = document.createElement('form'); form.className='form';
     const currentPlan = DB.planos.find(p => p.id === client.planoId) || null;
@@ -205,7 +269,6 @@ function initClientes(){
 
     form.querySelector('#cancelRenew')?.addEventListener('click', ()=> window.app.closeModal());
 
-    // função que salva a renovação e atualiza UI/state
     function saveRenewal(){
       const f = form.elements;
       const newPlanId = f.namedItem('planoId').value;
@@ -220,21 +283,20 @@ function initClientes(){
       try { renderSummary(); } catch(_) {}
     }
 
-    // submit = salvar apenas
-    form.addEventListener('submit', (e)=> {
+    // salvar apenas: feedback não bloqueante (toast)
+    form.addEventListener('submit', async (e)=> {
       e.preventDefault();
       saveRenewal();
       window.app.closeModal();
-      alert(`Cliente ${client.nome} renovado até ${form.elements.namedItem('dataVencimento').value}. Renovação salva (simulada).`);
+      await showToast(`Cliente ${client.nome} renovado até ${form.elements.namedItem('dataVencimento').value}.`, 1800);
     });
 
-    // botão "Salvar e Notificar": salva, mostra confirmação, espera 2s, depois envia mensagem
-    form.querySelector('#saveNotifyRenew')?.addEventListener('click', (e)=>{
-      // salvar primeiro
+    // salvar e notificar: salva, mostra toast curto, espera 2s, abre WhatsApp em nova aba
+    form.querySelector('#saveNotifyRenew')?.addEventListener('click', async (e)=>{
       saveRenewal();
-      // feedback imediato de salvamento
-      alert(`Renovação salva para ${client.nome}. Aguardando 2 segundos antes de abrir o WhatsApp para notificação.`);
-      // montar mensagem de confirmação da renovação
+      // mostrar feedback não bloqueante e aguardar visualização
+      await showToast(`Renovação salva para ${client.nome}. Abrindo WhatsApp em breve...`, 2000);
+      // construir mensagem de confirmação
       const plan = DB.planos.find(p => p.id === client.planoId) || null;
       const planName = plan ? plan.nome : '—';
       const venc = fmtDate(client.dataVencimento);
@@ -250,22 +312,32 @@ function initClientes(){
       const msg = encodeURIComponent(lines.join('\n'));
       const raw = client.whatsapp || '';
       const num = raw.replace(/\D/g,'');
-      // esperar 2 segundos antes de abrir link
-      setTimeout(()=> {
-        if (num) {
-          const href = `https://wa.me/${num}?text=${msg}`;
-          const win = window.open(href, '_blank');
-          if (!win) window.location.href = href;
-        } else {
-          alert('Número de WhatsApp inválido para este cliente.');
+      if (num) {
+        const href = `https://wa.me/${num}?text=${msg}`;
+        const w = window.open(href, '_blank', 'noopener,noreferrer');
+        if (!w) {
+          // fallback click link in new tab
+          const a = document.createElement('a');
+          a.href = href;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
         }
-        window.app.closeModal();
-      }, 2000);
+      } else {
+        showToast('Número de WhatsApp inválido para este cliente.', 2500);
+      }
+      window.app.closeModal();
     });
 
     window.app.openModal(form);
   }
 
+  /* -------------------------
+     Edit / New client
+     ------------------------- */
   function openEdit(client){
     const form = document.createElement('form'); form.className='form';
     form.innerHTML = `<h3>Editar Cliente</h3>
@@ -283,6 +355,7 @@ function initClientes(){
       window.app.closeModal();
       renderClients();
       renderSummary();
+      showToast('Cliente atualizado.', 1400);
     });
     window.app.openModal(form);
   }
@@ -316,6 +389,7 @@ function initClientes(){
         window.app.closeModal();
         renderClients();
         renderSummary();
+        showToast('Cliente criado.', 1400);
       });
       window.app.openModal(form);
     });
@@ -326,5 +400,6 @@ function initClientes(){
   renderClients();
 }
 
+// export standardized name
 window.initClientes = initClientes;
 if (document.readyState !== 'loading' && document.getElementById('clientsList')) initClientes();
