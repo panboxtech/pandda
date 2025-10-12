@@ -4,7 +4,8 @@
    - Ao notificar: seta statusNotificacao = true e salva (window.app.saveState)
    - Renovação: calcula nova data somando a validade (meses) do plano; plano atual selecionado por padrão;
      ao trocar plano, atualiza data em tempo real; mostra nome e usuario1 na modal.
-   - Renovação: "Salvar" e "Salvar e Notificar" usam feedback não bloqueante (toast) e abrem o link em nova aba.
+   - Renovação: "Salvar" e "Salvar e Notificar" salvam de forma segura; envio só ocorre se o saveState for bem-sucedido.
+   - Feedback não bloqueante (toast) e abertura do link em nova aba
 */
 
 function initClientes(){
@@ -184,13 +185,17 @@ function initClientes(){
     notifyBtn.addEventListener('click', (e)=>{
       const href = whatsappHref(c);
       c.statusNotificacao = true;
-      window.app.saveState();
+      try {
+        window.app.saveState();
+      } catch(err) {
+        console.error('Falha ao salvar statusNotificacao:', err);
+        showToast('Falha ao salvar notificação. Operação cancelada.', 2200);
+        return;
+      }
       updateNotifyBtnLabel();
       if (href) {
-        // abrir sempre em nova aba
         const w = window.open(href, '_blank', 'noopener,noreferrer');
         if (!w) {
-          // popup bloqueado: tentar abrir em nova aba via href assignment em alvo e foco
           const a = document.createElement('a');
           a.href = href;
           a.target = '_blank';
@@ -233,7 +238,7 @@ function initClientes(){
   }
 
   /* -------------------------
-     Renovação: "Salvar" e "Salvar e Notificar" (feedback não bloqueante e nova aba)
+     Renovação: "Salvar" e "Salvar e Notificar" (salvamento verificado antes de envio)
      ------------------------- */
   function openRenew(client){
     const form = document.createElement('form'); form.className='form';
@@ -269,34 +274,49 @@ function initClientes(){
 
     form.querySelector('#cancelRenew')?.addEventListener('click', ()=> window.app.closeModal());
 
-    function saveRenewal(){
-      const f = form.elements;
-      const newPlanId = f.namedItem('planoId').value;
-      const newDate = f.namedItem('dataVencimento').value;
-      client.planoId = newPlanId;
-      client.dataVencimento = newDate;
-      client.numeroRenovacoes = (client.numeroRenovacoes || 0) + 1;
-      client.renovacaoConfirmada = true;
-      client.ultimaConfirmacao = new Date().toISOString();
-      window.app.saveState();
-      try { renderClients(); } catch(_) {}
-      try { renderSummary(); } catch(_) {}
+    // função que salva a renovação e retorna true se salvou, false caso contrário
+    async function saveRenewal(){
+      try {
+        const f = form.elements;
+        const newPlanId = f.namedItem('planoId').value;
+        const newDate = f.namedItem('dataVencimento').value;
+        client.planoId = newPlanId;
+        client.dataVencimento = newDate;
+        client.numeroRenovacoes = (client.numeroRenovacoes || 0) + 1;
+        client.renovacaoConfirmada = true;
+        client.ultimaConfirmacao = new Date().toISOString();
+        try {
+          window.app.saveState();
+        } catch (err) {
+          console.error('Erro ao salvar estado:', err);
+          return false;
+        }
+        try { renderClients(); } catch(_) {}
+        try { renderSummary(); } catch(_) {}
+        return true;
+      } catch (err) {
+        console.error('Erro inesperado em saveRenewal:', err);
+        return false;
+      }
     }
 
     // salvar apenas: feedback não bloqueante (toast)
     form.addEventListener('submit', async (e)=> {
       e.preventDefault();
-      saveRenewal();
+      const ok = await saveRenewal();
       window.app.closeModal();
-      await showToast(`Cliente ${client.nome} renovado até ${form.elements.namedItem('dataVencimento').value}.`, 1800);
+      if (ok) await showToast(`Cliente ${client.nome} renovado até ${form.elements.namedItem('dataVencimento').value}.`, 1800);
+      else showToast('Falha ao salvar renovação. Tente novamente.', 2200);
     });
 
-    // salvar e notificar: salva, mostra toast curto, espera 2s, abre WhatsApp em nova aba
+    // salvar e notificar: salva, se salvou então mostra toast curto, espera 2s, abre WhatsApp em nova aba
     form.querySelector('#saveNotifyRenew')?.addEventListener('click', async (e)=>{
-      saveRenewal();
-      // mostrar feedback não bloqueante e aguardar visualização
+      const ok = await saveRenewal();
+      if (!ok) {
+        showToast('Falha ao salvar renovação. Notificação cancelada.', 2500);
+        return;
+      }
       await showToast(`Renovação salva para ${client.nome}. Abrindo WhatsApp em breve...`, 2000);
-      // construir mensagem de confirmação
       const plan = DB.planos.find(p => p.id === client.planoId) || null;
       const planName = plan ? plan.nome : '—';
       const venc = fmtDate(client.dataVencimento);
@@ -316,7 +336,6 @@ function initClientes(){
         const href = `https://wa.me/${num}?text=${msg}`;
         const w = window.open(href, '_blank', 'noopener,noreferrer');
         if (!w) {
-          // fallback click link in new tab
           const a = document.createElement('a');
           a.href = href;
           a.target = '_blank';
@@ -347,15 +366,20 @@ function initClientes(){
     f.namedItem('nome').value = client.nome || '';
     f.namedItem('whatsapp').value = client.whatsapp || '';
     form.querySelector('#cancelClient')?.addEventListener('click', ()=> window.app.closeModal());
-    form.addEventListener('submit', (e)=> {
+    form.addEventListener('submit', async (e)=> {
       e.preventDefault();
       client.nome = f.namedItem('nome').value;
       client.whatsapp = f.namedItem('whatsapp').value;
-      window.app.saveState();
-      window.app.closeModal();
-      renderClients();
-      renderSummary();
-      showToast('Cliente atualizado.', 1400);
+      try {
+        window.app.saveState();
+        window.app.closeModal();
+        renderClients();
+        renderSummary();
+        await showToast('Cliente atualizado.', 1400);
+      } catch(err) {
+        console.error('Erro ao salvar cliente:', err);
+        showToast('Falha ao salvar cliente.', 1800);
+      }
     });
     window.app.openModal(form);
   }
@@ -380,16 +404,21 @@ function initClientes(){
         <div class="two-col"><label class="field"><span>Nome</span><input name="nome" required></label><label class="field"><span>WhatsApp</span><input name="whatsapp"></label></div>
         <div class="form-actions"><button type="button" id="cancelNew" class="secondary">Cancelar</button><button type="submit" class="primary">Salvar</button></div>`;
       form.querySelector('#cancelNew')?.addEventListener('click', ()=> window.app.closeModal());
-      form.addEventListener('submit', (e)=> {
+      form.addEventListener('submit', async (e)=> {
         e.preventDefault();
         const f = form.elements;
         const nc = { id:'c'+Math.random().toString(36).slice(2,8), nome: f.namedItem('nome').value, whatsapp: f.namedItem('whatsapp').value, dataCriacao: (new Date()).toISOString().slice(0,10), dataVencimento: (new Date()).toISOString().slice(0,10), planoId:'', usuario1:'', observacoes:'', statusNotificacao:false, numeroRenovacoes:0, bloqueado:false };
-        DB.clientes.push(nc);
-        window.app.saveState();
-        window.app.closeModal();
-        renderClients();
-        renderSummary();
-        showToast('Cliente criado.', 1400);
+        try {
+          DB.clientes.push(nc);
+          window.app.saveState();
+          window.app.closeModal();
+          renderClients();
+          renderSummary();
+          await showToast('Cliente criado.', 1400);
+        } catch(err) {
+          console.error('Erro ao salvar novo cliente:', err);
+          showToast('Falha ao criar cliente.', 1800);
+        }
       });
       window.app.openModal(form);
     });
