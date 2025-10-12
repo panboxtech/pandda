@@ -1,6 +1,15 @@
 const CONTENT = document.getElementById('content');
 const STORAGE_KEY = 'pandda_simple_v2';
 
+/* Determina base do app (suporta GitHub Pages em /repo/ e sites em raiz) */
+window.APP_BASE = (function(){
+  const baseTag = document.querySelector('base');
+  if (baseTag && baseTag.href) return baseTag.href;
+  // keep trailing slash
+  const path = window.location.pathname.replace(/\/[^\/]*$/, '/');
+  return window.location.origin + path;
+})();
+
 /* Usa dados mock externos se não houver dados salvos */
 function defaultData(){
   return window.MockData || { planos: [], servidores: [], clientes: [] };
@@ -57,18 +66,20 @@ function loadCssAbsolute(href){
   });
 }
 
-/* Corrige caminhos de assets */
+/* Corrige caminhos de assets usando APP_BASE quando apropriado */
 function resolveAssetUrl(baseUrl, assetPath){
   if (!assetPath) return assetPath;
   if (/^(https?:)?\/\//i.test(assetPath)) return assetPath;
   if (assetPath.startsWith('/')) {
+    // caminho absoluto a partir da origem
     return new URL(assetPath, window.location.origin).toString();
   }
-  if (/^(\.\/|\.\.\/)?js\//.test(assetPath)) {
+  // tratar "js/..." e "css/..." como relativos à base do app (index)
+  if (/^(\.\/|\.\.\/)?(js|css)\//.test(assetPath)) {
     const clean = assetPath.replace(/^(\.\/|\.\.\/)/, '');
-    const appBase = new URL('.', window.location.href).toString();
-    return new URL(clean, appBase).toString();
+    return new URL(clean, window.APP_BASE).toString();
   }
+  // caso padrão: relativo à view/baseUrl
   return new URL(assetPath, baseUrl).toString();
 }
 
@@ -189,6 +200,8 @@ function bindSidebar(){
     ev.stopPropagation();
     const sb = document.getElementById('sidebar'); sb && sb.remove();
     hideTopbarAndResetContent();
+    // limpa DB e volta para login (opcional)
+    window.DB = defaultData();
     loadView('views/login.html').catch(e => console.error(e));
   });
 }
@@ -246,12 +259,10 @@ function bindTopbarToggle(){
       const topbar = document.getElementById('topbar');
       const modal = document.getElementById('modal');
 
-      // ignore cliques dentro da sidebar, topbar e modal
       if (isDescendant(sb, ev.target)) return;
       if (isDescendant(topbar, ev.target)) return;
       if (isDescendant(modal, ev.target)) return;
 
-      // clique fora -> minimizar
       sb.classList.add('collapsed');
       const contentRoot = document.getElementById('content');
       if (contentRoot) contentRoot.classList.add('collapsed');
@@ -259,7 +270,6 @@ function bindTopbarToggle(){
     window.__sidebarOutsideClickBound = true;
   }
 
-  // ajuste ao redimensionar
   window.addEventListener('resize', () => {
     const sb = document.getElementById('sidebar');
     const contentRoot = document.getElementById('content');
@@ -302,33 +312,39 @@ document.getElementById('modal')?.addEventListener('click', (e) => {
   if (e.target === document.getElementById('modal')) closeModal();
 });
 
-/* start: carrega mock-data, inicializa DB e carrega login */
-(async function start(){
+/* Função a ser chamada após login bem-sucedido
+   - carrega js/mock-data.js a partir de APP_BASE
+   - inicializa window.DB
+   - injeta sidebar e carrega a view inicial
+*/
+window.app = window.app || {};
+window.app.afterLogin = async function afterLogin(){
   try {
-    // tenta garantir que mock-data.js está carregado antes do DB
+    // carrega mock-data apenas agora
     if (!window.MockData) {
+      const mockUrl = new URL('js/mock-data.js', window.APP_BASE).toString();
       try {
-        const mockUrl = new URL('/js/mock-data.js', window.location.origin).toString();
         await loadScriptAbsolute(mockUrl);
-      } catch(e) {
-        console.warn('Não foi possível carregar js/mock-data.js automaticamente. Prosseguindo com dados vazios.');
+      } catch(e){
+        console.warn('Falha ao carregar mock-data em', mockUrl, e);
       }
     }
 
+    // inicializa DB agora que mock-data foi tentado
     window.DB = loadState();
 
+    // injeta sidebar e abre view inicial
+    injectSidebar();
+  } catch(e){
+    console.error('Erro em afterLogin:', e);
+  }
+};
+
+/* start: carrega somente a view de login (não carrega mock-data automaticamente) */
+(async function start(){
+  try {
     await loadView('views/login.html');
   } catch(e){
     console.error('Falha ao carregar view inicial:', e);
   }
 })();
-
-/* expose API */
-window.app = {
-  injectSidebar,
-  loadView,
-  openModal,
-  closeModal,
-  saveState: () => saveState(window.DB),
-  getDB: () => window.DB
-};
