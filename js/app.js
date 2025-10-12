@@ -24,8 +24,6 @@ function saveState(s){
   localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
 }
 
-window.DB = loadState();
-
 /* Utilitários de carregamento */
 function normalizeUrl(base, relative){
   try {
@@ -212,31 +210,24 @@ function hideTopbarAndResetContent(){
     contentRoot.classList.remove('collapsed');
   }
 }
-
-/* Helper: verifica se node é descendente de root */
 function isDescendant(root, node){
   if (!root || !node) return false;
   return root === node || root.contains(node);
 }
-
-/* Configura comportamento do toggle e clique fora para desktop */
 function bindTopbarToggle(){
   const tb = document.getElementById('sidebarToggle');
   const sidebar = document.getElementById('sidebar');
   if (!tb || !sidebar) return;
 
-  // substitui o botão por clone para evitar múltiplos listeners
   const newTb = tb.cloneNode(true);
   tb.parentNode.replaceChild(newTb, tb);
 
   newTb.addEventListener('click', (ev)=>{
     ev.stopPropagation();
-    // mobile: open overlay
     if (window.matchMedia('(max-width:880px)').matches) {
       sidebar.classList.toggle('open');
       return;
     }
-    // desktop: toggle collapsed state
     sidebar.classList.toggle('collapsed');
     const contentRoot = document.getElementById('content');
     if (contentRoot) {
@@ -245,25 +236,22 @@ function bindTopbarToggle(){
     }
   });
 
-  // clique fora fecha/minimiza sidebar no desktop
-  // usa listener único por documento
   if (!window.__sidebarOutsideClickBound) {
     document.addEventListener('click', (ev) => {
-      // só aplica em telas maiores
       if (window.matchMedia('(max-width:880px)').matches) return;
       const sb = document.getElementById('sidebar');
       if (!sb) return;
-      // se já está minimizado, não faz nada
       if (sb.classList.contains('collapsed')) return;
-      const toggleBtn = document.getElementById('sidebarToggle');
-      const topbar = document.getElementById('topbar');
 
-      // se o clique ocorreu dentro da sidebar, topbar (inclui toggle) ou em modal, ignora
+      const topbar = document.getElementById('topbar');
+      const modal = document.getElementById('modal');
+
+      // ignore cliques dentro da sidebar, topbar e modal
       if (isDescendant(sb, ev.target)) return;
       if (isDescendant(topbar, ev.target)) return;
-      if (isDescendant(document.getElementById('modal'), ev.target)) return;
+      if (isDescendant(modal, ev.target)) return;
 
-      // clicou fora -> minimizar
+      // clique fora -> minimizar
       sb.classList.add('collapsed');
       const contentRoot = document.getElementById('content');
       if (contentRoot) contentRoot.classList.add('collapsed');
@@ -271,21 +259,19 @@ function bindTopbarToggle(){
     window.__sidebarOutsideClickBound = true;
   }
 
-  // garante que redimensionamentos ajustem classes corretamente
+  // ajuste ao redimensionar
   window.addEventListener('resize', () => {
     const sb = document.getElementById('sidebar');
     const contentRoot = document.getElementById('content');
     if (!sb) return;
     if (window.matchMedia('(max-width:880px)').matches) {
-      // mobile: remover collapsed, manter open conforme necessário
       sb.classList.remove('collapsed');
       if (contentRoot) contentRoot.classList.remove('collapsed');
     } else {
-      // desktop: se não tiver collapsed, garantir content não esteja collapsed
-      if (!sb.classList.contains('collapsed')) {
-        if (contentRoot) contentRoot.classList.remove('collapsed');
-      } else {
+      if (sb.classList.contains('collapsed')) {
         if (contentRoot) contentRoot.classList.add('collapsed');
+      } else {
+        if (contentRoot) contentRoot.classList.remove('collapsed');
       }
     }
   });
@@ -316,9 +302,15 @@ document.getElementById('modal')?.addEventListener('click', (e) => {
   if (e.target === document.getElementById('modal')) closeModal();
 });
 
-/* start: load login */
+/* start: inicializa DB após mock-data e carrega login */
 (async function start(){
   try {
+    // Garante que MockData (se existir) já está disponível antes de inicializar DB
+    if (!window.MockData) {
+      console.warn('MockData não carregado — usando dados vazios');
+    }
+    window.DB = loadState();
+
     await loadView('views/login.html');
   } catch(e){
     console.error('Falha ao carregar view inicial:', e);
