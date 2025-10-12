@@ -1,13 +1,17 @@
 /* js/app.js - atualizado
-   - Ao injetar o sidebar: permanece fechado em mobile (sem classe 'open')
-     e aberto (visível) em desktop (sem 'collapsed').
-   - Ao login/carregamento inicial da view clientes continua sendo a view padrão.
-   - Mantém loader de views, mock DB e API exposta (window.app).
+   - Depois de carregar a view, tenta chamar função init<NomeView>() automaticamente
+     (ex.: views/clientes.html -> initClientes())
+   - Isso garante que a listagem e handlers sejam sempre inicializados, mesmo ao recarregar
+     a mesma view clicando no menu lateral.
+   - Mantém loader de scripts/css, injeção do sidebar e API window.app.
 */
 
 const CONTENT = document.getElementById('content');
 const STORAGE_KEY = 'pandda_simple_v2';
 
+/* -------------------------
+   Mock data helpers
+   ------------------------- */
 function defaultData(){
   const planos = [
     { id:'p1', nome:'Básico', pontos:10, valor:29.9, validade:1 },
@@ -32,26 +36,106 @@ function saveState(s){ localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
 
 window.DB = loadState();
 
+/* -------------------------
+   Asset loader utils
+   ------------------------- */
 function normalizeUrl(base, relative){ try { return new URL(relative, base).toString(); } catch(e){ return relative; } }
-function loadScriptAbsolute(src){ return new Promise((resolve,reject)=>{ const s=document.createElement('script'); s.src=src; s.async=false; s.onload=()=>resolve(src); s.onerror=()=>reject(new Error('Falha ao carregar script: '+src)); document.body.appendChild(s); }); }
-function loadCssAbsolute(href){ return new Promise((resolve)=>{ const l=document.createElement('link'); l.rel='stylesheet'; l.href=href; l.onload=()=>resolve(href); l.onerror=()=>{ console.warn('Falha ao carregar CSS:',href); resolve(href); }; document.head.appendChild(l); }); }
+function loadScriptAbsolute(src){
+  return new Promise((resolve,reject)=>{
+    // Avoid loading same script multiple times: if already present, resolve immediately
+    const existing = Array.from(document.scripts).find(s => s.src === src);
+    if (existing) return resolve(src);
 
+    const s = document.createElement('script');
+    s.src = src;
+    s.async = false;
+    s.onload = () => resolve(src);
+    s.onerror = () => reject(new Error('Falha ao carregar script: '+src));
+    document.body.appendChild(s);
+  });
+}
+function loadCssAbsolute(href){
+  return new Promise((resolve)=>{
+    // Avoid duplicate links
+    const exists = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).some(l=>l.href === href);
+    if (exists) return resolve(href);
+    const l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = href;
+    l.onload = () => resolve(href);
+    l.onerror = () => { console.warn('Falha ao carregar CSS:',href); resolve(href); };
+    document.head.appendChild(l);
+  });
+}
+
+/* -------------------------
+   loadView(path)
+   - carrega HTML, injeta no CONTENT
+   - carrega CSS e scripts referenciados na view (resolvidos em relação à view)
+   - ao final tenta chamar init<NomeView>() automaticamente
+     ex.: views/clientes.html -> initClientes()
+*/
 async function loadView(path){
   if (!CONTENT) throw new Error('#content não encontrado');
   try {
     const res = await fetch(path);
     if (!res.ok) throw new Error('HTTP '+res.status+' ao buscar '+path);
     const html = await res.text();
+
+    // parse em container temporário
     const temp = document.createElement('div');
     temp.innerHTML = html;
+
     const baseUrl = new URL(path, window.location.href).toString();
+
+    // processar links CSS dentro da view
     const links = Array.from(temp.querySelectorAll('link[rel="stylesheet"]'));
-    const cssPromises = links.map(l=> { const href = l.getAttribute('href'); const abs = normalizeUrl(baseUrl, href); l.remove(); return loadCssAbsolute(abs); });
+    const cssPromises = links.map(l=> {
+      const href = l.getAttribute('href');
+      const abs = normalizeUrl(baseUrl, href);
+      l.remove();
+      return loadCssAbsolute(abs);
+    });
+
+    // coletar scripts com src da view
     const scripts = Array.from(temp.querySelectorAll('script[src]'));
-    const scriptSrcs = scripts.map(s=> { const src = s.getAttribute('src'); const abs = normalizeUrl(baseUrl, src); s.remove(); return abs; });
+    const scriptSrcs = scripts.map(s=> {
+      const src = s.getAttribute('src');
+      const abs = normalizeUrl(baseUrl, src);
+      s.remove();
+      return abs;
+    });
+
+    // injetar HTML sem as tags processadas
     CONTENT.innerHTML = temp.innerHTML;
+
+    // esperar CSS
     await Promise.all(cssPromises);
-    for (const s of scriptSrcs) { await loadScriptAbsolute(s); }
+
+    // carregar scripts sequencialmente (mantém ordem)
+    for (const s of scriptSrcs){
+      await loadScriptAbsolute(s);
+    }
+
+    // após tudo carregado, chamar init automático baseado no nome da view
+    // extrair nome do arquivo: views/clientes.html -> clientes
+    try {
+      const viewName = path.split('/').pop().split('.').shift(); // 'clientes'
+      const fnName = 'init' + viewName.charAt(0).toUpperCase() + viewName.slice(1); // 'initClientes'
+      if (typeof window[fnName] === 'function') {
+        // chamar em microtask para garantir que event handlers adicionados no script já estejam prontos
+        Promise.resolve().then(()=> window[fnName]());
+      } else {
+        // opcional: se a view fornece init via window.viewInit (flexível), chamar também
+        if (typeof window.viewInit === 'function') {
+          Promise.resolve().then(()=> window.viewInit());
+        }
+      }
+    } catch(e){
+      // não bloquear se init falhar; registrar no console
+      console.warn('Aviso ao chamar init da view:', e);
+    }
+
     return;
   } catch(err){
     CONTENT.innerHTML = `<div style="padding:20px;color:#500;background:#fff7f7;border-radius:8px">Erro ao carregar a view: ${err.message || err}</div>`;
@@ -59,23 +143,16 @@ async function loadView(path){
   }
 }
 
-/* Sidebar injection (apenas após login)
-   - Em mobile (matchMedia <=880px) o sidebar é injetado fechado (sem classe 'open').
-   - Em desktop o sidebar é injetado visível (sem 'collapsed').
-*/
+/* -------------------------
+   Sidebar injection / binding
+   ------------------------- */
 function injectSidebar(){
   if (document.getElementById('sidebar')) return;
   const aside = document.createElement('aside');
   aside.id = 'sidebar';
-  // decidir estado inicial com base em breakpoint
   const isMobile = window.matchMedia('(max-width:880px)').matches;
-  if (isMobile) {
-    // mobile: injetar fechado (overlay), sem 'open'
-    aside.className = ''; // fechado por padrão
-  } else {
-    // desktop: injetar visível (não collapsed)
-    aside.className = ''; // visível
-  }
+  // mobile: inject closed; desktop: visible
+  aside.className = '';
   aside.innerHTML = `
     <div class="sidebar-top">
       <div class="logo-mini">PANDDA</div>
@@ -89,29 +166,32 @@ function injectSidebar(){
   `;
   document.body.insertBefore(aside, document.getElementById('app'));
   bindSidebar();
+
+  // UI adjustments
   showTopbarAndShiftContent();
-  // garantir estado visual coerente: no mobile remover 'open' (fechado); no desktop garantir sem 'collapsed'
   const sb = document.getElementById('sidebar');
-  if (!sb) return;
-  if (isMobile) {
-    sb.classList.remove('open');
-    sb.classList.remove('collapsed');
-  } else {
-    sb.classList.remove('collapsed');
-    sb.classList.remove('open');
+  if (sb) {
+    if (isMobile) { sb.classList.remove('open'); sb.classList.remove('collapsed'); }
+    else { sb.classList.remove('collapsed'); sb.classList.remove('open'); }
   }
 }
 
 function bindSidebar(){
   document.querySelectorAll('#sidebar .nav-btn').forEach(b=>{
-    b.addEventListener('click', async ()=> {
+    b.addEventListener('click', async () => {
       const viewPath = b.dataset.view;
-      try { await loadView(viewPath); } catch(e){ console.error(e); }
-      // close mobile overlay after click
+      try {
+        // sempre chamar loadView mesmo se já estivermos na view — assim o init será chamado de novo
+        await loadView(viewPath);
+      } catch(e){
+        console.error('Erro ao carregar view via sidebar:', e);
+      }
+      // se mobile, fechar overlay após clique
       const sb = document.getElementById('sidebar');
       if (sb && window.matchMedia('(max-width:880px)').matches) sb.classList.remove('open');
     });
   });
+
   const logout = document.getElementById('logoutBtn');
   if (logout) logout.addEventListener('click', ()=> {
     const sb = document.getElementById('sidebar'); sb && sb.remove();
@@ -120,18 +200,17 @@ function bindSidebar(){
   });
 }
 
-/* Topbar helpers */
+/* -------------------------
+   Topbar & content helpers
+   ------------------------- */
 function showTopbarAndShiftContent(){
   const topbar = document.getElementById('topbar');
   if (topbar) topbar.classList.remove('hidden');
   const contentRoot = document.getElementById('content');
   if (contentRoot) {
-    // adicionar classe para deslocar no desktop; mobile irá sobrepor
     contentRoot.classList.add('content-with-sidebar');
-    // ajustar collapsed conforme sidebar
     const sb = document.getElementById('sidebar');
-    if (sb && sb.classList.contains('collapsed')) contentRoot.classList.add('collapsed');
-    else contentRoot.classList.remove('collapsed');
+    if (sb && sb.classList.contains('collapsed')) contentRoot.classList.add('collapsed'); else contentRoot.classList.remove('collapsed');
   }
   bindTopbarToggle();
 }
@@ -146,21 +225,19 @@ function hideTopbarAndResetContent(){
   }
 }
 
-/* Topbar toggle: só opera se sidebar existir */
+/* Topbar toggle binding */
 function bindTopbarToggle(){
   const tbToggle = document.getElementById('sidebarToggle');
   if (!tbToggle) return;
-  // replace to remove previous handlers
+  // replace to remove old handlers
   const newToggle = tbToggle.cloneNode(true);
   tbToggle.parentNode.replaceChild(newToggle, tbToggle);
   newToggle.addEventListener('click', ()=> {
     const sb = document.getElementById('sidebar');
     if (!sb) return;
     if (window.matchMedia('(max-width:880px)').matches) {
-      // mobile: toggle overlay open/closed
       sb.classList.toggle('open');
     } else {
-      // desktop: collapse/expand
       sb.classList.toggle('collapsed');
       const contentRoot = document.getElementById('content');
       if (contentRoot) {
@@ -182,7 +259,10 @@ function closeModal(){ const modal=document.getElementById('modal'); if(!modal) 
 document.getElementById('modalClose')?.addEventListener('click', closeModal);
 document.getElementById('modal')?.addEventListener('click', (e)=> { if (e.target === document.getElementById('modal')) closeModal(); });
 
-/* Start: carregar login view inicialmente (clientes será view padrão após login) */
+/* -------------------------
+   Init: carregar login view inicialmente
+   - view padrão clientes será carregada após o login (login.js já chama injectSidebar/showShell/loadView)
+*/
 (async function start(){
   try { await loadView('views/login.html'); } catch(e){ console.error('Falha ao carregar view inicial:', e); }
 })();
