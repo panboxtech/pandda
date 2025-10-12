@@ -1,17 +1,12 @@
-/* js/app.js - atualizado
-   - Depois de carregar a view, tenta chamar função init<NomeView>() automaticamente
-     (ex.: views/clientes.html -> initClientes())
-   - Isso garante que a listagem e handlers sejam sempre inicializados, mesmo ao recarregar
-     a mesma view clicando no menu lateral.
-   - Mantém loader de scripts/css, injeção do sidebar e API window.app.
+/* js/app.js - loader e shell (corrigido)
+   - Garante que, após injetar HTML de uma view, a função de inicialização específica seja chamada
+   - Mesmo que o script da view já esteja presente no documento, chamamos init<View>()
+   - Convenção: views/<name>.html -> função window.init<Name>() deve existir (ex.: views/clientes.html -> window.initClientes)
 */
 
 const CONTENT = document.getElementById('content');
 const STORAGE_KEY = 'pandda_simple_v2';
 
-/* -------------------------
-   Mock data helpers
-   ------------------------- */
 function defaultData(){
   const planos = [
     { id:'p1', nome:'Básico', pontos:10, valor:29.9, validade:1 },
@@ -36,15 +31,12 @@ function saveState(s){ localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
 
 window.DB = loadState();
 
-/* -------------------------
-   Asset loader utils
-   ------------------------- */
 function normalizeUrl(base, relative){ try { return new URL(relative, base).toString(); } catch(e){ return relative; } }
 function loadScriptAbsolute(src){
   return new Promise((resolve,reject)=>{
-    // Avoid loading same script multiple times: if already present, resolve immediately
-    const existing = Array.from(document.scripts).find(s => s.src === src);
-    if (existing) return resolve(src);
+    // if script already present, resolve immediately (we will still call init)
+    const exists = Array.from(document.scripts).some(s=>s.src === src);
+    if (exists) return resolve(src);
 
     const s = document.createElement('script');
     s.src = src;
@@ -56,7 +48,6 @@ function loadScriptAbsolute(src){
 }
 function loadCssAbsolute(href){
   return new Promise((resolve)=>{
-    // Avoid duplicate links
     const exists = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).some(l=>l.href === href);
     if (exists) return resolve(href);
     const l = document.createElement('link');
@@ -68,13 +59,40 @@ function loadCssAbsolute(href){
   });
 }
 
-/* -------------------------
-   loadView(path)
-   - carrega HTML, injeta no CONTENT
-   - carrega CSS e scripts referenciados na view (resolvidos em relação à view)
-   - ao final tenta chamar init<NomeView>() automaticamente
-     ex.: views/clientes.html -> initClientes()
+/* Extract simple view name from path: views/clientes.html -> clientes */
+function viewNameFromPath(path){
+  try {
+    return path.split('/').pop().split('.').shift();
+  } catch(e){
+    return null;
+  }
+}
+
+/* Call the init function for a view:
+   priority:
+   - global function named init<CapitalizedView>() e.g. initClientes
+   - window.viewInit (fallback, view can set this)
 */
+function callViewInit(view){
+  if (!view) return;
+  const cap = view.charAt(0).toUpperCase() + view.slice(1);
+  const fn = 'init' + cap;
+  try {
+    if (typeof window[fn] === 'function') {
+      window[fn]();
+      return;
+    }
+    if (typeof window.viewInit === 'function') {
+      window.viewInit();
+      return;
+    }
+    // no init found — fine
+  } catch(e){
+    console.error('Erro ao executar init da view', fn, e);
+  }
+}
+
+/* loadView: load html, css, scripts; inject and then call init function */
 async function loadView(path){
   if (!CONTENT) throw new Error('#content não encontrado');
   try {
@@ -82,59 +100,45 @@ async function loadView(path){
     if (!res.ok) throw new Error('HTTP '+res.status+' ao buscar '+path);
     const html = await res.text();
 
-    // parse em container temporário
     const temp = document.createElement('div');
     temp.innerHTML = html;
 
     const baseUrl = new URL(path, window.location.href).toString();
 
-    // processar links CSS dentro da view
+    // links and scripts inside view
     const links = Array.from(temp.querySelectorAll('link[rel="stylesheet"]'));
-    const cssPromises = links.map(l=> {
+    const cssPromises = links.map(l => {
       const href = l.getAttribute('href');
       const abs = normalizeUrl(baseUrl, href);
       l.remove();
       return loadCssAbsolute(abs);
     });
 
-    // coletar scripts com src da view
     const scripts = Array.from(temp.querySelectorAll('script[src]'));
-    const scriptSrcs = scripts.map(s=> {
+    const scriptSrcs = scripts.map(s => {
       const src = s.getAttribute('src');
       const abs = normalizeUrl(baseUrl, src);
       s.remove();
       return abs;
     });
 
-    // injetar HTML sem as tags processadas
+    // inject HTML
     CONTENT.innerHTML = temp.innerHTML;
 
-    // esperar CSS
+    // wait CSS
     await Promise.all(cssPromises);
 
-    // carregar scripts sequencialmente (mantém ordem)
+    // load scripts sequentially (if not loaded), but even if loaded we will call init after
     for (const s of scriptSrcs){
-      await loadScriptAbsolute(s);
+      await loadScriptAbsolute(s).catch(err => {
+        console.warn('Falha ao carregar script da view:', s, err);
+      });
     }
 
-    // após tudo carregado, chamar init automático baseado no nome da view
-    // extrair nome do arquivo: views/clientes.html -> clientes
-    try {
-      const viewName = path.split('/').pop().split('.').shift(); // 'clientes'
-      const fnName = 'init' + viewName.charAt(0).toUpperCase() + viewName.slice(1); // 'initClientes'
-      if (typeof window[fnName] === 'function') {
-        // chamar em microtask para garantir que event handlers adicionados no script já estejam prontos
-        Promise.resolve().then(()=> window[fnName]());
-      } else {
-        // opcional: se a view fornece init via window.viewInit (flexível), chamar também
-        if (typeof window.viewInit === 'function') {
-          Promise.resolve().then(()=> window.viewInit());
-        }
-      }
-    } catch(e){
-      // não bloquear se init falhar; registrar no console
-      console.warn('Aviso ao chamar init da view:', e);
-    }
+    // ensure init is always called (fixes "click same menu and handlers missing")
+    const view = viewNameFromPath(path);
+    // small delay to ensure any inline script executed
+    setTimeout(()=> callViewInit(view), 0);
 
     return;
   } catch(err){
@@ -143,16 +147,11 @@ async function loadView(path){
   }
 }
 
-/* -------------------------
-   Sidebar injection / binding
-   ------------------------- */
+/* Sidebar injection and bindings (same behavior: injected only after login) */
 function injectSidebar(){
   if (document.getElementById('sidebar')) return;
   const aside = document.createElement('aside');
   aside.id = 'sidebar';
-  const isMobile = window.matchMedia('(max-width:880px)').matches;
-  // mobile: inject closed; desktop: visible
-  aside.className = '';
   aside.innerHTML = `
     <div class="sidebar-top">
       <div class="logo-mini">PANDDA</div>
@@ -166,27 +165,21 @@ function injectSidebar(){
   `;
   document.body.insertBefore(aside, document.getElementById('app'));
   bindSidebar();
-
-  // UI adjustments
   showTopbarAndShiftContent();
-  const sb = document.getElementById('sidebar');
-  if (sb) {
-    if (isMobile) { sb.classList.remove('open'); sb.classList.remove('collapsed'); }
-    else { sb.classList.remove('collapsed'); sb.classList.remove('open'); }
-  }
+  // ensure default view (clientes) loaded after injection
+  loadView('views/clientes.html').catch(e => console.error(e));
 }
 
 function bindSidebar(){
   document.querySelectorAll('#sidebar .nav-btn').forEach(b=>{
     b.addEventListener('click', async () => {
-      const viewPath = b.dataset.view;
+      const path = b.dataset.view;
       try {
-        // sempre chamar loadView mesmo se já estivermos na view — assim o init será chamado de novo
-        await loadView(viewPath);
+        await loadView(path);
       } catch(e){
         console.error('Erro ao carregar view via sidebar:', e);
       }
-      // se mobile, fechar overlay após clique
+      // mobile: close overlay
       const sb = document.getElementById('sidebar');
       if (sb && window.matchMedia('(max-width:880px)').matches) sb.classList.remove('open');
     });
@@ -196,25 +189,18 @@ function bindSidebar(){
   if (logout) logout.addEventListener('click', ()=> {
     const sb = document.getElementById('sidebar'); sb && sb.remove();
     hideTopbarAndResetContent();
-    loadView('views/login.html').catch(e=>console.error(e));
+    loadView('views/login.html').catch(e => console.error(e));
   });
 }
 
-/* -------------------------
-   Topbar & content helpers
-   ------------------------- */
+/* Topbar and content helpers */
 function showTopbarAndShiftContent(){
   const topbar = document.getElementById('topbar');
   if (topbar) topbar.classList.remove('hidden');
   const contentRoot = document.getElementById('content');
-  if (contentRoot) {
-    contentRoot.classList.add('content-with-sidebar');
-    const sb = document.getElementById('sidebar');
-    if (sb && sb.classList.contains('collapsed')) contentRoot.classList.add('collapsed'); else contentRoot.classList.remove('collapsed');
-  }
+  if (contentRoot) contentRoot.classList.add('content-with-sidebar');
   bindTopbarToggle();
 }
-
 function hideTopbarAndResetContent(){
   const topbar = document.getElementById('topbar');
   if (topbar) topbar.classList.add('hidden');
@@ -224,57 +210,41 @@ function hideTopbarAndResetContent(){
     contentRoot.classList.remove('collapsed');
   }
 }
-
-/* Topbar toggle binding */
 function bindTopbarToggle(){
-  const tbToggle = document.getElementById('sidebarToggle');
-  if (!tbToggle) return;
-  // replace to remove old handlers
-  const newToggle = tbToggle.cloneNode(true);
-  tbToggle.parentNode.replaceChild(newToggle, tbToggle);
-  newToggle.addEventListener('click', ()=> {
-    const sb = document.getElementById('sidebar');
-    if (!sb) return;
-    if (window.matchMedia('(max-width:880px)').matches) {
-      sb.classList.toggle('open');
-    } else {
+  const tb = document.getElementById('sidebarToggle');
+  if (!tb) return;
+  const newTb = tb.cloneNode(true);
+  tb.parentNode.replaceChild(newTb, tb);
+  newTb.addEventListener('click', ()=>{
+    const sb = document.getElementById('sidebar'); if (!sb) return;
+    if (window.matchMedia('(max-width:880px)').matches) sb.classList.toggle('open');
+    else {
       sb.classList.toggle('collapsed');
       const contentRoot = document.getElementById('content');
       if (contentRoot) {
-        if (sb.classList.contains('collapsed')) contentRoot.classList.add('collapsed');
-        else contentRoot.classList.remove('collapsed');
+        if (sb.classList.contains('collapsed')) contentRoot.classList.add('collapsed'); else contentRoot.classList.remove('collapsed');
       }
     }
   });
 }
 
-/* Modal helpers */
-function openModal(contentNode){
-  const modal = document.getElementById('modal'), panel = document.getElementById('modalContent');
-  if (!modal || !panel) return;
-  panel.innerHTML = ''; if (contentNode instanceof Node) panel.appendChild(contentNode); else panel.innerHTML = String(contentNode);
-  modal.classList.remove('hidden');
-}
-function closeModal(){ const modal=document.getElementById('modal'); if(!modal) return; modal.classList.add('hidden'); const panel=document.getElementById('modalContent'); if(panel) panel.innerHTML=''; }
+/* modal */
+function openModal(content){ const modal = document.getElementById('modal'), panel = document.getElementById('modalContent'); if(!modal||!panel) return; panel.innerHTML=''; if(content instanceof Node) panel.appendChild(content); else panel.innerHTML = String(content); modal.classList.remove('hidden'); }
+function closeModal(){ const modal=document.getElementById('modal'); if(!modal) return; modal.classList.add('hidden'); document.getElementById('modalContent').innerHTML=''; }
 document.getElementById('modalClose')?.addEventListener('click', closeModal);
-document.getElementById('modal')?.addEventListener('click', (e)=> { if (e.target === document.getElementById('modal')) closeModal(); });
+document.getElementById('modal')?.addEventListener('click',(e)=> { if(e.target === document.getElementById('modal')) closeModal(); });
 
-/* -------------------------
-   Init: carregar login view inicialmente
-   - view padrão clientes será carregada após o login (login.js já chama injectSidebar/showShell/loadView)
-*/
+/* start: load login */
 (async function start(){
   try { await loadView('views/login.html'); } catch(e){ console.error('Falha ao carregar view inicial:', e); }
 })();
 
-/* API exposta */
+/* expose API */
 window.app = {
   injectSidebar,
   loadView,
   openModal,
   closeModal,
   saveState: ()=> saveState(window.DB),
-  getDB: ()=> window.DB,
-  showShell: showTopbarAndShiftContent,
-  hideShell: hideTopbarAndResetContent
+  getDB: ()=> window.DB
 };
