@@ -1,8 +1,7 @@
-/* app.js - shell revisado (correções para carregamento de views)
-   - trata melhor erros (mostra mensagem clara)
-   - resolve caminhos relativos de scripts e links dentro das views carregadas
-   - protege contra scripts ausentes / load errors
-   - mantém o loader simples e compatível com a estrutura: index.html + views/*.html + js/*.js + css/*.css
+/* app.js - shell (v2)
+   - Sidebar is injected only after login (no automatic injection on sidebarToggle)
+   - sidebarToggle now only toggles the sidebar if it exists
+   - loader de views e mock DB permanecem
 */
 
 const CONTENT = document.getElementById('content');
@@ -42,23 +41,9 @@ window.DB = loadState(); // expõe DB para views
 /* -------------------------
    Utilitários para carregar assets (HTML, CSS, JS)
    ------------------------- */
-
-/*
-  normalizeUrl(base, relative)
-  - resolve um caminho relativo em relação a uma URL base (browser-like)
-  - usado para transformar src/href relativos contidos nas views carregadas
-*/
 function normalizeUrl(base, relative){
-  try {
-    return new URL(relative, base).toString();
-  } catch(e){
-    return relative;
-  }
+  try { return new URL(relative, base).toString(); } catch(e){ return relative; }
 }
-
-/* Carrega um script criando tag <script> no documento.
-   Retorna promise que resolve ou rejeita com Error contendo message.
-*/
 function loadScriptAbsolute(src){
   return new Promise((resolve, reject) => {
     const s = document.createElement('script');
@@ -69,59 +54,33 @@ function loadScriptAbsolute(src){
     document.body.appendChild(s);
   });
 }
-
-/* Carrega link CSS adicionando <link> ao head.
-   Retorna promise que resolve quando o stylesheet for carregado (ou imediatamente se falhar).
-*/
 function loadCssAbsolute(href){
   return new Promise((resolve) => {
     const l = document.createElement('link');
     l.rel = 'stylesheet';
     l.href = href;
     l.onload = () => resolve(href);
-    l.onerror = () => {
-      // não tratar como erro crítico; apenas resolver para seguir fluxo
-      console.warn('Falha ao carregar CSS:', href);
-      resolve(href);
-    };
+    l.onerror = () => { console.warn('Falha ao carregar CSS:', href); resolve(href); };
     document.head.appendChild(l);
   });
 }
 
-/* -------------------------
-   loadView(path)
-   - carrega HTML via fetch
-   - injeta no CONTENT
-   - processa <link rel="stylesheet"> e <script src=""> encontrados dentro do HTML carregado:
-       * resolve caminhos relativos com base no caminho da view
-       * carrega CSS antes de scripts
-   - devolve Promise que resolve quando tudo for carregado ou rejeita com erro claro
-*/
 async function loadView(path){
   if (!CONTENT) throw new Error('Elemento #content não encontrado no DOM');
   try {
     const res = await fetch(path);
     if (!res.ok) throw new Error(`HTTP ${res.status} ao buscar ${path}`);
     const html = await res.text();
-
-    // criar um container temporário para analisar o HTML e extrair assets relativos
     const temp = document.createElement('div');
     temp.innerHTML = html;
-
-    // base para resolver caminhos relativos (a URL da view)
     const baseUrl = new URL(path, window.location.href).toString();
-
-    // coletar e processar <link rel="stylesheet"> dentro da view
     const links = Array.from(temp.querySelectorAll('link[rel="stylesheet"]'));
     const cssPromises = links.map(link => {
       const href = link.getAttribute('href');
       const abs = normalizeUrl(baseUrl, href);
-      // remover o link da view para evitar duplicação quando injetar html no CONTENT
       link.remove();
       return loadCssAbsolute(abs);
     });
-
-    // coletar e processar scripts com src dentro da view
     const scripts = Array.from(temp.querySelectorAll('script[src]'));
     const scriptSrcs = scripts.map(s => {
       const src = s.getAttribute('src');
@@ -129,29 +88,15 @@ async function loadView(path){
       s.remove();
       return abs;
     });
-
-    // finalmente injetar o HTML sem as tags externas de CSS/JS (já processadas)
     CONTENT.innerHTML = temp.innerHTML;
-
-    // aguardar CSS carregado (se houver)
     await Promise.all(cssPromises);
-
-    // carregar scripts sequencialmente (para manter ordem)
     for (const s of scriptSrcs){
-      try {
-        await loadScriptAbsolute(s);
-      } catch(err){
-        // se o script falhar, lançar erro com contexto
-        throw err;
-      }
+      await loadScriptAbsolute(s);
     }
-
     return;
   } catch(err){
-    // tornar mensagem mais explícita para o usuário
     const msg = err && err.message ? err.message : String(err);
     CONTENT.innerHTML = `<div style="padding:20px;color:#500;background:#fff7f7;border-radius:8px">Erro ao carregar a view: ${msg}</div>`;
-    // também lança para logs externos se necessário
     throw new Error(msg);
   }
 }
@@ -180,13 +125,9 @@ function injectSidebar(){
 
 function bindSidebar(){
   document.querySelectorAll('#sidebar .nav-btn').forEach(b=>{
-    b.addEventListener('click', async (e)=>{
+    b.addEventListener('click', async () => {
       const viewPath = b.dataset.view;
-      try {
-        await loadView(viewPath);
-      } catch(err){
-        console.error('Erro ao carregar view via sidebar:', err.message || err);
-      }
+      try { await loadView(viewPath); } catch(err){ console.error('Erro ao carregar view via sidebar:', err.message || err); }
     });
   });
   const logout = document.getElementById('logoutBtn');
@@ -197,14 +138,23 @@ function bindSidebar(){
 }
 
 /* -------------------------
-   Topbar toggle (mobile friendly)
-   ------------------------- */
+   Topbar toggle (agora somente toggles se sidebar existir)
+   - Não injeta sidebar automaticamente; sidebar deve ser injetada apenas após login
+*/
 const tbToggle = document.getElementById('sidebarToggle');
 if (tbToggle){
-  tbToggle.addEventListener('click', ()=>{
+  tbToggle.addEventListener('click', () => {
     const sb = document.getElementById('sidebar');
-    if (!sb) return;
-    sb.classList.toggle('open');
+    if (!sb) {
+      // NÃO injetar automaticamente: o menu só está disponível após login
+      console.warn('Sidebar não disponível. Faça login para acessar o menu lateral.');
+      return;
+    }
+    if (window.matchMedia('(max-width:880px)').matches) {
+      sb.classList.toggle('open'); // mobile slide in/out
+    } else {
+      sb.classList.toggle('collapsed'); // desktop collapse/expand
+    }
   });
 }
 
