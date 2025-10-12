@@ -2,6 +2,9 @@
    - initClientes(): renderiza clientes, summary, binds
    - Notificar via WhatsApp: abre wa.me com mensagem formatada
    - Ao notificar: seta statusNotificacao = true e salva (window.app.saveState)
+   - Renovação: calcula nova data somando a validade (meses) do plano; plano atual selecionado por padrão;
+     ao trocar plano, atualiza data em tempo real; mostra nome e usuario1 na modal.
+   - Atualização: ao salvar renovação, força re-render imediato da lista e dos cards
 */
 
 function initClientes(){
@@ -10,6 +13,18 @@ function initClientes(){
   const summary = document.getElementById('summaryCards');
 
   function fmtDate(d){ if(!d) return ''; try{ return new Date(d).toISOString().slice(0,10); }catch(e){return d;} }
+
+  function addMonthsToDate(dateStr, months){
+    // aceita dateStr no formato ISO (yyyy-mm-dd) ou Date
+    const d = dateStr ? new Date(dateStr) : new Date();
+    const day = d.getDate();
+    d.setMonth(d.getMonth() + Number(months));
+    // corrigir overflow de dias (ex.: 31 de jan + 1 mês => 03 de março)
+    if (d.getDate() !== day) {
+      d.setDate(0); // último dia do mês anterior
+    }
+    return d.toISOString().slice(0,10);
+  }
 
   function computeBuckets(){
     const today = new Date();
@@ -56,7 +71,6 @@ function initClientes(){
     const planName = plan ? plan.nome : '—';
     const venc = fmtDate(client.dataVencimento);
     const paymentInfo = plan ? planPaymentInfo(plan) : '';
-    // montar mensagem legível
     const lines = [
       `Olá ${client.nome},`,
       `Seu plano: ${planName}.`,
@@ -68,14 +82,10 @@ function initClientes(){
   }
 
   function whatsappHref(client){
-    // usar wa.me com número no formato internacional sem símbolos
     const raw = client.whatsapp || '';
-    const num = raw.replace(/\D/g,''); // apenas dígitos
+    const num = raw.replace(/\D/g,'');
     const msg = whatsappMessageFor(client);
-    if (!num) {
-      // fallback: abrir apenas whatsapp web sem número (não funcionará para enviar), retornar empty string
-      return '';
-    }
+    if (!num) return '';
     return `https://wa.me/${num}?text=${msg}`;
   }
 
@@ -104,7 +114,6 @@ function initClientes(){
       </div>
     `;
 
-    // label do botão de notificar conforme statusNotificacao
     const notifyBtn = row.querySelector('.notify-btn');
     function updateNotifyBtnLabel(){
       if (c.statusNotificacao === true || c.statusNotificacao === 1) {
@@ -115,7 +124,6 @@ function initClientes(){
     }
     updateNotifyBtnLabel();
 
-    // bind handlers
     row.querySelector('.expand-toggle')?.addEventListener('click', (e)=>{
       row.classList.toggle('expanded');
       e.target.textContent = row.classList.contains('expanded') ? 'Mostrar menos ▲' : 'Mostrar mais informações ▼';
@@ -125,20 +133,14 @@ function initClientes(){
     row.querySelector('.edit-btn')?.addEventListener('click', ()=> openEdit(c));
     row.querySelector('.block-client')?.addEventListener('click', ()=> { if(!confirm('Bloquear cliente?')) return; c.bloqueado = true; window.app.saveState(); renderClients(); });
 
-    // Notificar: abrir WhatsApp e setar statusNotificacao = true
     notifyBtn.addEventListener('click', (e)=>{
       const href = whatsappHref(c);
-      // setar status antes de abrir para garantir persistência
       c.statusNotificacao = true;
       window.app.saveState();
       updateNotifyBtnLabel();
-      // abrir WhatsApp em nova aba/janela
       if (href) {
         const win = window.open(href, '_blank');
-        if (!win) {
-          // popup bloqueado, fallback: alterar location (não recomendado)
-          window.location.href = href;
-        }
+        if (!win) window.location.href = href;
       } else {
         alert('Número de WhatsApp inválido para este cliente.');
       }
@@ -171,26 +173,57 @@ function initClientes(){
     out.forEach(c => cont.appendChild(makeRow(c)));
   }
 
+  // Renovação: usa addMonthsToDate util e atualiza data em tempo real
   function openRenew(client){
     const form = document.createElement('form'); form.className='form';
-    form.innerHTML = `<h3>Renovar ${client.nome}</h3>
+    // obter plano atual e montar select
+    const currentPlan = DB.planos.find(p => p.id === client.planoId) || null;
+    form.innerHTML = `
+      <h3>Renovar ${client.nome} — ${client.usuario1 || ''}</h3>
       <label class="field"><span>Plano</span><select name="planoId"></select></label>
-      <label class="field"><span>Nova data de vencimento</span><input name="dataVencimento" type="date" value="${client.dataVencimento}"></label>
-      <div class="form-actions"><button type="button" id="cancelRenew" class="secondary">Cancelar</button><button type="submit" class="primary">Renovar</button></div>`;
+      <label class="field"><span>Nova data de vencimento</span><input name="dataVencimento" type="date"></label>
+      <div class="form-actions"><button type="button" id="cancelRenew" class="secondary">Cancelar</button><button type="submit" class="primary">Renovar</button></div>
+    `;
     const sel = form.querySelector('select[name=planoId]');
-    DB.planos.forEach(p=> { const o=document.createElement('option'); o.value=p.id; o.textContent=p.nome + ' ('+p.validade+'m)'; if (p.id===client.planoId) o.selected=true; sel.appendChild(o); });
+    DB.planos.forEach(p=> {
+      const o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = `${p.nome} — ${p.validade} mês(es)`;
+      if (currentPlan && p.id === currentPlan.id) o.selected = true;
+      sel.appendChild(o);
+    });
+
+    const dateIn = form.querySelector('input[name=dataVencimento]');
+    // define valor inicial: data atual de vencimento + validade do plano selecionado (ou cliente.dataVencimento caso vazio)
+    const baseDate = client.dataVencimento || new Date().toISOString().slice(0,10);
+    const initialPlan = DB.planos.find(p => p.id === sel.value);
+    dateIn.value = addMonthsToDate(baseDate, initialPlan ? initialPlan.validade : 0);
+
+    // ao trocar o select, recalcular a data com base na data atual de vencimento do cliente
+    sel.addEventListener('change', () => {
+      const p = DB.planos.find(x => x.id === sel.value);
+      dateIn.value = addMonthsToDate(baseDate, p ? p.validade : 0);
+    });
+
     form.querySelector('#cancelRenew')?.addEventListener('click', ()=> window.app.closeModal());
+
+    // submit handler atualizado: salva, fecha modal e força re-render da lista e summary
     form.addEventListener('submit', (e)=> {
       e.preventDefault();
       const f = form.elements;
-      client.planoId = f.namedItem('planoId').value;
-      client.dataVencimento = f.namedItem('dataVencimento').value;
-      client.numeroRenovacoes = (client.numeroRenovacoes||0) + 1;
+      const newPlanId = f.namedItem('planoId').value;
+      const newDate = f.namedItem('dataVencimento').value;
+      client.planoId = newPlanId;
+      client.dataVencimento = newDate;
+      client.numeroRenovacoes = (client.numeroRenovacoes || 0) + 1;
       window.app.saveState();
       window.app.closeModal();
-      renderClients();
-      renderSummary();
+      // forçar atualização imediata da UI
+      try { renderClients(); } catch(_) {}
+      try { renderSummary(); } catch(_) {}
+      alert(`Cliente ${client.nome} renovado até ${newDate}.`);
     });
+
     window.app.openModal(form);
   }
 
@@ -215,20 +248,20 @@ function initClientes(){
     window.app.openModal(form);
   }
 
-  // bind UI controls (search, toggle, new client)
+  // binds
   const searchEl = document.getElementById('searchInput');
   if (searchEl) {
-    searchEl.removeEventListener?.('input', renderClients);
+    try { searchEl.removeEventListener('input', renderClients); } catch(_) {}
     searchEl.addEventListener('input', ()=> renderClients());
   }
   const onlyToggle = document.getElementById('onlyNotifiedToggle');
   if (onlyToggle) {
-    onlyToggle.removeEventListener?.('change', renderClients);
+    try { onlyToggle.removeEventListener('change', renderClients); } catch(_) {}
     onlyToggle.addEventListener('change', ()=> renderClients());
   }
   const btnNew = document.getElementById('btnNewClient');
   if (btnNew) {
-    btnNew.removeEventListener?.('click', ()=>{});
+    try { btnNew.removeEventListener('click', ()=>{}); } catch(_) {}
     btnNew.addEventListener('click', ()=> {
       const form = document.createElement('form'); form.className='form';
       form.innerHTML = `<h3>Novo Cliente</h3>
@@ -238,7 +271,7 @@ function initClientes(){
       form.addEventListener('submit', (e)=> {
         e.preventDefault();
         const f = form.elements;
-        const nc = { id:'c'+Math.random().toString(36).slice(2,8), nome: f.namedItem('nome').value, whatsapp: f.namedItem('whatsapp').value, dataCriacao: (new Date()).toISOString().slice(0,10), dataVencimento: (new Date()).toISOString().slice(0,10), planoId:'', observacoes:'', statusNotificacao:false, numeroRenovacoes:0, bloqueado:false };
+        const nc = { id:'c'+Math.random().toString(36).slice(2,8), nome: f.namedItem('nome').value, whatsapp: f.namedItem('whatsapp').value, dataCriacao: (new Date()).toISOString().slice(0,10), dataVencimento: (new Date()).toISOString().slice(0,10), planoId:'', usuario1:'', observacoes:'', statusNotificacao:false, numeroRenovacoes:0, bloqueado:false };
         DB.clientes.push(nc);
         window.app.saveState();
         window.app.closeModal();
