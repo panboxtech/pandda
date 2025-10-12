@@ -4,7 +4,8 @@
    - Ao notificar: seta statusNotificacao = true e salva (window.app.saveState)
    - Renovação: calcula nova data somando a validade (meses) do plano; plano atual selecionado por padrão;
      ao trocar plano, atualiza data em tempo real; mostra nome e usuario1 na modal.
-   - Atualização: ao salvar renovação, força re-render imediato da lista e dos cards
+   - Renovação agora tem 2 ações: Salvar; Salvar e Notificar (abre WhatsApp confirmando nova data)
+   - Simula confirmação de renovação (salva flag e timestamp no objeto cliente e persiste em localStorage)
 */
 
 function initClientes(){
@@ -15,14 +16,10 @@ function initClientes(){
   function fmtDate(d){ if(!d) return ''; try{ return new Date(d).toISOString().slice(0,10); }catch(e){return d;} }
 
   function addMonthsToDate(dateStr, months){
-    // aceita dateStr no formato ISO (yyyy-mm-dd) ou Date
     const d = dateStr ? new Date(dateStr) : new Date();
     const day = d.getDate();
     d.setMonth(d.getMonth() + Number(months));
-    // corrigir overflow de dias (ex.: 31 de jan + 1 mês => 03 de março)
-    if (d.getDate() !== day) {
-      d.setDate(0); // último dia do mês anterior
-    }
+    if (d.getDate() !== day) d.setDate(0);
     return d.toISOString().slice(0,10);
   }
 
@@ -173,16 +170,19 @@ function initClientes(){
     out.forEach(c => cont.appendChild(makeRow(c)));
   }
 
-  // Renovação: usa addMonthsToDate util e atualiza data em tempo real
+  // Renovação: agora com "Salvar" e "Salvar e Notificar"
   function openRenew(client){
     const form = document.createElement('form'); form.className='form';
-    // obter plano atual e montar select
     const currentPlan = DB.planos.find(p => p.id === client.planoId) || null;
     form.innerHTML = `
       <h3>Renovar ${client.nome} — ${client.usuario1 || ''}</h3>
       <label class="field"><span>Plano</span><select name="planoId"></select></label>
       <label class="field"><span>Nova data de vencimento</span><input name="dataVencimento" type="date"></label>
-      <div class="form-actions"><button type="button" id="cancelRenew" class="secondary">Cancelar</button><button type="submit" class="primary">Renovar</button></div>
+      <div class="form-actions">
+        <button type="button" id="cancelRenew" class="secondary">Cancelar</button>
+        <button type="submit" id="saveRenew" class="primary">Salvar</button>
+        <button type="button" id="saveNotifyRenew" class="primary">Salvar e Notificar</button>
+      </div>
     `;
     const sel = form.querySelector('select[name=planoId]');
     DB.planos.forEach(p=> {
@@ -194,12 +194,10 @@ function initClientes(){
     });
 
     const dateIn = form.querySelector('input[name=dataVencimento]');
-    // define valor inicial: data atual de vencimento + validade do plano selecionado (ou cliente.dataVencimento caso vazio)
     const baseDate = client.dataVencimento || new Date().toISOString().slice(0,10);
     const initialPlan = DB.planos.find(p => p.id === sel.value);
     dateIn.value = addMonthsToDate(baseDate, initialPlan ? initialPlan.validade : 0);
 
-    // ao trocar o select, recalcular a data com base na data atual de vencimento do cliente
     sel.addEventListener('change', () => {
       const p = DB.planos.find(x => x.id === sel.value);
       dateIn.value = addMonthsToDate(baseDate, p ? p.validade : 0);
@@ -207,21 +205,60 @@ function initClientes(){
 
     form.querySelector('#cancelRenew')?.addEventListener('click', ()=> window.app.closeModal());
 
-    // submit handler atualizado: salva, fecha modal e força re-render da lista e summary
-    form.addEventListener('submit', (e)=> {
-      e.preventDefault();
+    // função que salva a renovação e atualiza UI/state
+    function saveRenewal(){
       const f = form.elements;
       const newPlanId = f.namedItem('planoId').value;
       const newDate = f.namedItem('dataVencimento').value;
       client.planoId = newPlanId;
       client.dataVencimento = newDate;
       client.numeroRenovacoes = (client.numeroRenovacoes || 0) + 1;
+      // simular confirmação/backend: marcar flag e timestamp
+      client.renovacaoConfirmada = true;
+      client.ultimaConfirmacao = new Date().toISOString();
       window.app.saveState();
-      window.app.closeModal();
-      // forçar atualização imediata da UI
+      // forçar re-render imediato
       try { renderClients(); } catch(_) {}
       try { renderSummary(); } catch(_) {}
-      alert(`Cliente ${client.nome} renovado até ${newDate}.`);
+    }
+
+    // submit = salvar apenas
+    form.addEventListener('submit', (e)=> {
+      e.preventDefault();
+      saveRenewal();
+      window.app.closeModal();
+      alert(`Cliente ${client.nome} renovado até ${form.elements.namedItem('dataVencimento').value}. Renovação salva (simulada).`);
+    });
+
+    // botão "Salvar e Notificar"
+    form.querySelector('#saveNotifyRenew')?.addEventListener('click', (e)=>{
+      // salvar primeiro
+      saveRenewal();
+      // montar mensagem de confirmação da renovação
+      const plan = DB.planos.find(p => p.id === client.planoId) || null;
+      const planName = plan ? plan.nome : '—';
+      const venc = fmtDate(client.dataVencimento);
+      const paymentInfo = plan ? planPaymentInfo(plan) : '';
+      const lines = [
+        `Olá ${client.nome},`,
+        `Sua renovação foi confirmada.`,
+        `Plano: ${planName}`,
+        `Nova data de vencimento: ${venc}`,
+      ];
+      if (paymentInfo) lines.push(`Formas de pagamento: ${paymentInfo}`);
+      lines.push('', 'Obrigado pela preferência.');
+      const msg = encodeURIComponent(lines.join('\n'));
+      const raw = client.whatsapp || '';
+      const num = raw.replace(/\D/g,'');
+      if (num) {
+        const href = `https://wa.me/${num}?text=${msg}`;
+        const win = window.open(href, '_blank');
+        if (!win) window.location.href = href;
+      } else {
+        alert('Número de WhatsApp inválido para este cliente.');
+      }
+      window.app.closeModal();
+      alert(`Renovação salva e notificação (simulada) enviada para ${client.nome}.`);
     });
 
     window.app.openModal(form);
@@ -287,6 +324,5 @@ function initClientes(){
   renderClients();
 }
 
-// export standardized name
 window.initClientes = initClientes;
 if (document.readyState !== 'loading' && document.getElementById('clientsList')) initClientes();
