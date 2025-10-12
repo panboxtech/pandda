@@ -173,7 +173,8 @@ function injectSidebar(){
 
 function bindSidebar(){
   document.querySelectorAll('#sidebar .nav-btn').forEach(b=>{
-    b.addEventListener('click', async () => {
+    b.addEventListener('click', async (ev) => {
+      ev.stopPropagation();
       const path = b.dataset.view;
       try {
         await loadView(path);
@@ -186,7 +187,8 @@ function bindSidebar(){
   });
 
   const logout = document.getElementById('logoutBtn');
-  if (logout) logout.addEventListener('click', ()=> {
+  if (logout) logout.addEventListener('click', (ev)=> {
+    ev.stopPropagation();
     const sb = document.getElementById('sidebar'); sb && sb.remove();
     hideTopbarAndResetContent();
     loadView('views/login.html').catch(e => console.error(e));
@@ -210,25 +212,80 @@ function hideTopbarAndResetContent(){
     contentRoot.classList.remove('collapsed');
   }
 }
+
+/* Helper: verifica se node é descendente de root */
+function isDescendant(root, node){
+  if (!root || !node) return false;
+  return root === node || root.contains(node);
+}
+
+/* Configura comportamento do toggle e clique fora para desktop */
 function bindTopbarToggle(){
   const tb = document.getElementById('sidebarToggle');
-  if (!tb) return;
+  const sidebar = document.getElementById('sidebar');
+  if (!tb || !sidebar) return;
+
+  // substitui o botão por clone para evitar múltiplos listeners
   const newTb = tb.cloneNode(true);
   tb.parentNode.replaceChild(newTb, tb);
-  newTb.addEventListener('click', ()=>{
+
+  newTb.addEventListener('click', (ev)=>{
+    ev.stopPropagation();
+    // mobile: open overlay
+    if (window.matchMedia('(max-width:880px)').matches) {
+      sidebar.classList.toggle('open');
+      return;
+    }
+    // desktop: toggle collapsed state
+    sidebar.classList.toggle('collapsed');
+    const contentRoot = document.getElementById('content');
+    if (contentRoot) {
+      if (sidebar.classList.contains('collapsed')) contentRoot.classList.add('collapsed');
+      else contentRoot.classList.remove('collapsed');
+    }
+  });
+
+  // clique fora fecha/minimiza sidebar no desktop
+  // usa listener único por documento
+  if (!window.__sidebarOutsideClickBound) {
+    document.addEventListener('click', (ev) => {
+      // só aplica em telas maiores
+      if (window.matchMedia('(max-width:880px)').matches) return;
+      const sb = document.getElementById('sidebar');
+      if (!sb) return;
+      // se já está minimizado, não faz nada
+      if (sb.classList.contains('collapsed')) return;
+      const toggleBtn = document.getElementById('sidebarToggle');
+      const topbar = document.getElementById('topbar');
+
+      // se o clique ocorreu dentro da sidebar, topbar (inclui toggle) ou em modal, ignora
+      if (isDescendant(sb, ev.target)) return;
+      if (isDescendant(topbar, ev.target)) return;
+      if (isDescendant(document.getElementById('modal'), ev.target)) return;
+
+      // clicou fora -> minimizar
+      sb.classList.add('collapsed');
+      const contentRoot = document.getElementById('content');
+      if (contentRoot) contentRoot.classList.add('collapsed');
+    }, { capture: true });
+    window.__sidebarOutsideClickBound = true;
+  }
+
+  // garante que redimensionamentos ajustem classes corretamente
+  window.addEventListener('resize', () => {
     const sb = document.getElementById('sidebar');
+    const contentRoot = document.getElementById('content');
     if (!sb) return;
     if (window.matchMedia('(max-width:880px)').matches) {
-      sb.classList.toggle('open');
+      // mobile: remover collapsed, manter open conforme necessário
+      sb.classList.remove('collapsed');
+      if (contentRoot) contentRoot.classList.remove('collapsed');
     } else {
-      sb.classList.toggle('collapsed');
-      const contentRoot = document.getElementById('content');
-      if (contentRoot) {
-        if (sb.classList.contains('collapsed')) {
-          contentRoot.classList.add('collapsed');
-        } else {
-          contentRoot.classList.remove('collapsed');
-        }
+      // desktop: se não tiver collapsed, garantir content não esteja collapsed
+      if (!sb.classList.contains('collapsed')) {
+        if (contentRoot) contentRoot.classList.remove('collapsed');
+      } else {
+        if (contentRoot) contentRoot.classList.add('collapsed');
       }
     }
   });
@@ -251,7 +308,8 @@ function closeModal(){
   const modal = document.getElementById('modal');
   if (!modal) return;
   modal.classList.add('hidden');
-  document.getElementById('modalContent').innerHTML = '';
+  const panel = document.getElementById('modalContent');
+  if (panel) panel.innerHTML = '';
 }
 document.getElementById('modalClose')?.addEventListener('click', closeModal);
 document.getElementById('modal')?.addEventListener('click', (e) => {
