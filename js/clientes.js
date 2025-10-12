@@ -4,8 +4,8 @@
    - Ao notificar: seta statusNotificacao = true e salva (window.app.saveState)
    - Renovação: calcula nova data somando a validade (meses) do plano; plano atual selecionado por padrão;
      ao trocar plano, atualiza data em tempo real; mostra nome e usuario1 na modal.
-   - Renovação agora tem 2 ações: Salvar; Salvar e Notificar (abre WhatsApp confirmando nova data)
-   - Simula confirmação de renovação (salva flag e timestamp no objeto cliente e persiste em localStorage)
+   - Renovação agora tem 3 ações: Cancelar, Salvar, Salvar e Notificar (salva, confirma salvamento, depois envia)
+   - Simula confirmação de renovação (marca flag e timestamp no objeto cliente e persiste em localStorage)
 */
 
 function initClientes(){
@@ -170,7 +170,7 @@ function initClientes(){
     out.forEach(c => cont.appendChild(makeRow(c)));
   }
 
-  // Renovação: agora com "Salvar" e "Salvar e Notificar"
+  // Renovação: agora com "Salvar" e "Salvar e Notificar" (feedback de salvo antes de enviar)
   function openRenew(client){
     const form = document.createElement('form'); form.className='form';
     const currentPlan = DB.planos.find(p => p.id === client.planoId) || null;
@@ -213,11 +213,9 @@ function initClientes(){
       client.planoId = newPlanId;
       client.dataVencimento = newDate;
       client.numeroRenovacoes = (client.numeroRenovacoes || 0) + 1;
-      // simular confirmação/backend: marcar flag e timestamp
       client.renovacaoConfirmada = true;
       client.ultimaConfirmacao = new Date().toISOString();
       window.app.saveState();
-      // forçar re-render imediato
       try { renderClients(); } catch(_) {}
       try { renderSummary(); } catch(_) {}
     }
@@ -230,10 +228,12 @@ function initClientes(){
       alert(`Cliente ${client.nome} renovado até ${form.elements.namedItem('dataVencimento').value}. Renovação salva (simulada).`);
     });
 
-    // botão "Salvar e Notificar"
+    // botão "Salvar e Notificar": salva, mostra confirmação, depois envia mensagem
     form.querySelector('#saveNotifyRenew')?.addEventListener('click', (e)=>{
       // salvar primeiro
       saveRenewal();
+      // feedback imediato de salvamento
+      alert(`Renovação salva para ${client.nome}. Agora abrindo WhatsApp para notificar o cliente.`);
       // montar mensagem de confirmação da renovação
       const plan = DB.planos.find(p => p.id === client.planoId) || null;
       const planName = plan ? plan.nome : '—';
@@ -258,7 +258,6 @@ function initClientes(){
         alert('Número de WhatsApp inválido para este cliente.');
       }
       window.app.closeModal();
-      alert(`Renovação salva e notificação (simulada) enviada para ${client.nome}.`);
     });
 
     window.app.openModal(form);
