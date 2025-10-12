@@ -238,7 +238,7 @@ function initClientes(){
   }
 
   /* -------------------------
-     Renovação: "Salvar" e "Salvar e Notificar" (salvamento verificado antes de envio)
+     Renovação: "Salvar" and "Salvar e Notificar" (salvamento verificado before send)
      ------------------------- */
   function openRenew(client){
     const form = document.createElement('form'); form.className='form';
