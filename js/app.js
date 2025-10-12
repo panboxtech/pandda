@@ -1,7 +1,7 @@
 /* js/app.js - loader e shell (corrigido)
    - Garante que, após injetar HTML de uma view, a função de inicialização específica seja chamada
    - Mesmo que o script da view já esteja presente no documento, chamamos init<View>()
-   - Convenção: views/<name>.html -> função window.init<Name>() deve existir (ex.: views/clientes.html -> window.initClientes)
+   - Corrige resolução de assets: paths que começam com js/ são tratados como relativos à raiz do site
 */
 
 const CONTENT = document.getElementById('content');
@@ -92,6 +92,27 @@ function callViewInit(view){
   }
 }
 
+/* Resolve asset URL with special-case rules:
+   - absolute urls (http(s):// or //) returned as-is
+   - root-relative (/...) resolved from site origin
+   - paths starting with js/ or ./js/ or ../js/ are treated as site-root relative (/js/...)
+   - otherwise resolved relative to the view's baseUrl
+*/
+function resolveAssetUrl(baseUrl, assetPath){
+  if (!assetPath) return assetPath;
+  // absolute URL (http/https or protocol-relative)
+  if (/^(https?:)?\/\//i.test(assetPath)) return assetPath;
+  // root-relative path (starts with '/')
+  if (assetPath.startsWith('/')) return normalizeUrl(window.location.origin + '/', assetPath);
+  // treat js/ (and ./js/ ../js/) as root-relative to site (avoid prefixing with views/)
+  if (/^(\.\/|\.\.\/)?js\//.test(assetPath)) {
+    const clean = assetPath.replace(/^\.\//, '').replace(/^\.\.\//, '').replace(/^\/+/, '');
+    return normalizeUrl(window.location.origin + '/', clean);
+  }
+  // otherwise resolve relative to the view's base URL
+  return normalizeUrl(baseUrl, assetPath);
+}
+
 /* loadView: load html, css, scripts; inject and then call init function */
 async function loadView(path){
   if (!CONTENT) throw new Error('#content não encontrado');
@@ -109,7 +130,7 @@ async function loadView(path){
     const links = Array.from(temp.querySelectorAll('link[rel="stylesheet"]'));
     const cssPromises = links.map(l => {
       const href = l.getAttribute('href');
-      const abs = normalizeUrl(baseUrl, href);
+      const abs = resolveAssetUrl(baseUrl, href);
       l.remove();
       return loadCssAbsolute(abs);
     });
@@ -117,7 +138,7 @@ async function loadView(path){
     const scripts = Array.from(temp.querySelectorAll('script[src]'));
     const scriptSrcs = scripts.map(s => {
       const src = s.getAttribute('src');
-      const abs = normalizeUrl(baseUrl, src);
+      const abs = resolveAssetUrl(baseUrl, src);
       s.remove();
       return abs;
     });
