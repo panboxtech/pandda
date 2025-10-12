@@ -5,18 +5,40 @@
 html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial;}
 body{background:var(--bg);color:#222;-webkit-font-smoothing:antialiased}
 
-/* topbar fixed */
-#topbar{
-  display:flex;align-items:center;padding:10px 14px;background:#fff;border-bottom:1px solid #ececec;
-  position:fixed;top:0;left:0;right:0;z-index:200;height:52px;
-}
+/* topbar: por padrão escondida; mostrada após login adicionando/removendo classe hidden */
+#topbar{display:flex;align-items:center;padding:10px 14px;background:#fff;border-bottom:1px solid #ececec;position:fixed;top:0;left:0;right:0;z-index:200;height:52px;transition:transform .18s ease}
+#topbar.hidden{display:none}
 .icon-btn{border:0;background:transparent;font-size:20px;cursor:pointer}
 .topbar-title{font-weight:700;color:#0b304f;margin-left:8px}
 .topbar-space{flex:1}
 
 /* app layout */
-#app{padding-top:52px;}
-.content-root{min-height:calc(100vh - 52px);}
+#app{padding-top:0}
+.content-root{min-height:calc(100vh);padding-top:0}
+
+/* sidebar basic */
+#sidebar{
+  width:240px;background:#0f1724;color:#fff;padding:18px;display:flex;flex-direction:column;justify-content:space-between;gap:10px;transition:transform .22s ease, width .2s ease; z-index:110;
+  position:fixed; top:52px; left:0; bottom:0;
+}
+/* inicialmente escondido até injetado; quando injetado, começa com transform off-screen for mobile */
+#sidebar:not(.open):not(.collapsed){ transform: translateX(-100%); }
+
+/* mobile open */
+#sidebar.open{ transform: translateX(0); box-shadow:8px 0 30px rgba(0,0,0,0.12); }
+/* desktop collapsed */
+#sidebar.collapsed{ width:72px; overflow:hidden; transform: translateX(0); }
+
+.logo-mini{font-weight:700;font-size:18px;margin-bottom:8px}
+nav{display:flex;flex-direction:column;gap:8px}
+.nav-btn{background:transparent;color:#cfd8e3;border:0;padding:10px 12px;text-align:left;border-radius:8px;cursor:pointer}
+.nav-btn.active{background:#0b304f;color:#fff}
+.sidebar-bottom{font-size:12px;opacity:0.85}
+.link-like{background:transparent;border:0;color:#89c2ff;cursor:pointer;padding:8px 0}
+
+/* content shift when sidebar visible on desktop */
+.content-with-sidebar { margin-left:240px; padding-top:52px; transition: margin-left .18s ease; }
+.content-with-sidebar.collapsed { margin-left:72px; }
 
 /* modal */
 .modal{position:fixed;inset:0;background:rgba(8,12,20,0.45);display:flex;align-items:center;justify-content:center;padding:12px;z-index:300}
@@ -24,14 +46,16 @@ body{background:var(--bg);color:#222;-webkit-font-smoothing:antialiased}
 .modal-panel{background:#fff;padding:14px;border-radius:10px;max-width:860px;width:100%;max-height:90vh;overflow:auto;position:relative}
 .close{position:absolute;right:8px;top:8px;border:0;background:transparent;font-size:18px;cursor:pointer}
 
-/* small helpers */
+/* helpers */
 .primary{background:var(--accent);color:#fff;border:0;padding:8px 12px;border-radius:8px;cursor:pointer}
 .secondary{background:#eee;border:0;padding:8px 12px;border-radius:8px;cursor:pointer}
 .muted{color:var(--muted);font-size:13px}
 .field{display:block;margin:6px 0}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 
-/* responsive basics */
+/* responsive */
 @media (max-width:880px){
-  .two-col{grid-template-columns:1fr}
+  #sidebar{top:52px; width:260px}
+  /* on mobile content should not have left margin when sidebar present (overlay) */
+  .content-with-sidebar { margin-left:0; padding-top:52px; }
 }
