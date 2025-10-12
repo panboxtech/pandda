@@ -1,4 +1,4 @@
-// login.js - simples
+// login.js - atualizado para injetar a sidebar APENAS após login
 document.getElementById('toggleEye')?.addEventListener('click', ()=>{
   const p = document.getElementById('loginPass');
   if (!p) return;
@@ -7,7 +7,11 @@ document.getElementById('toggleEye')?.addEventListener('click', ()=>{
 
 document.getElementById('btnLogin')?.addEventListener('click', async (e)=>{
   // mock auth - qualquer credencial
-  // injetar sidebar e carregar clientes
-  window.app.injectSidebar();
-  await window.app.loadView('views/clientes.html');
+  // injetar sidebar e carregar página de clientes
+  if (window.app && typeof window.app.injectSidebar === 'function') {
+    window.app.injectSidebar();
+  }
+  if (window.app && typeof window.app.loadView === 'function') {
+    await window.app.loadView('views/clientes.html');
+  }
 });
