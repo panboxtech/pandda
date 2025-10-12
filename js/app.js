@@ -302,13 +302,19 @@ document.getElementById('modal')?.addEventListener('click', (e) => {
   if (e.target === document.getElementById('modal')) closeModal();
 });
 
-/* start: inicializa DB após mock-data e carrega login */
+/* start: carrega mock-data, inicializa DB e carrega login */
 (async function start(){
   try {
-    // Garante que MockData (se existir) já está disponível antes de inicializar DB
+    // tenta garantir que mock-data.js está carregado antes do DB
     if (!window.MockData) {
-      console.warn('MockData não carregado — usando dados vazios');
+      try {
+        const mockUrl = new URL('/js/mock-data.js', window.location.origin).toString();
+        await loadScriptAbsolute(mockUrl);
+      } catch(e) {
+        console.warn('Não foi possível carregar js/mock-data.js automaticamente. Prosseguindo com dados vazios.');
+      }
     }
+
     window.DB = loadState();
 
     await loadView('views/login.html');
