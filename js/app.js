@@ -1,7 +1,8 @@
-/* js/app.js - shell (ajustes para ocultar topbar antes do login e garantir toggle após login)
-   - Topbar permanece oculta até window.app.showShell() ser chamado (após login)
-   - Sidebar é injetada apenas após login (window.app.injectSidebar)
-   - sidebarToggle só tenta abrir se sidebar existir
+/* js/app.js - atualizado
+   - Ao injetar o sidebar: permanece fechado em mobile (sem classe 'open')
+     e aberto (visível) em desktop (sem 'collapsed').
+   - Ao login/carregamento inicial da view clientes continua sendo a view padrão.
+   - Mantém loader de views, mock DB e API exposta (window.app).
 */
 
 const CONTENT = document.getElementById('content');
@@ -58,12 +59,23 @@ async function loadView(path){
   }
 }
 
-/* Sidebar injection (somente após login) */
+/* Sidebar injection (apenas após login)
+   - Em mobile (matchMedia <=880px) o sidebar é injetado fechado (sem classe 'open').
+   - Em desktop o sidebar é injetado visível (sem 'collapsed').
+*/
 function injectSidebar(){
   if (document.getElementById('sidebar')) return;
   const aside = document.createElement('aside');
   aside.id = 'sidebar';
-  aside.className = 'open'; // injetada aberta por padrão no mobile, collapsed=false
+  // decidir estado inicial com base em breakpoint
+  const isMobile = window.matchMedia('(max-width:880px)').matches;
+  if (isMobile) {
+    // mobile: injetar fechado (overlay), sem 'open'
+    aside.className = ''; // fechado por padrão
+  } else {
+    // desktop: injetar visível (não collapsed)
+    aside.className = ''; // visível
+  }
   aside.innerHTML = `
     <div class="sidebar-top">
       <div class="logo-mini">PANDDA</div>
@@ -77,8 +89,17 @@ function injectSidebar(){
   `;
   document.body.insertBefore(aside, document.getElementById('app'));
   bindSidebar();
-  // show topbar and mark content area to shift on desktop
   showTopbarAndShiftContent();
+  // garantir estado visual coerente: no mobile remover 'open' (fechado); no desktop garantir sem 'collapsed'
+  const sb = document.getElementById('sidebar');
+  if (!sb) return;
+  if (isMobile) {
+    sb.classList.remove('open');
+    sb.classList.remove('collapsed');
+  } else {
+    sb.classList.remove('collapsed');
+    sb.classList.remove('open');
+  }
 }
 
 function bindSidebar(){
@@ -99,19 +120,19 @@ function bindSidebar(){
   });
 }
 
-/* Topbar show/hide helpers */
+/* Topbar helpers */
 function showTopbarAndShiftContent(){
   const topbar = document.getElementById('topbar');
   if (topbar) topbar.classList.remove('hidden');
   const contentRoot = document.getElementById('content');
   if (contentRoot) {
+    // adicionar classe para deslocar no desktop; mobile irá sobrepor
     contentRoot.classList.add('content-with-sidebar');
-    // adjust for collapsed state if needed
+    // ajustar collapsed conforme sidebar
     const sb = document.getElementById('sidebar');
     if (sb && sb.classList.contains('collapsed')) contentRoot.classList.add('collapsed');
     else contentRoot.classList.remove('collapsed');
   }
-  // bind toggle now that topbar exists/visible
   bindTopbarToggle();
 }
 
@@ -125,19 +146,21 @@ function hideTopbarAndResetContent(){
   }
 }
 
-/* Topbar toggle: só opera se sidebar existir (sidebar é injetada após login) */
+/* Topbar toggle: só opera se sidebar existir */
 function bindTopbarToggle(){
   const tbToggle = document.getElementById('sidebarToggle');
   if (!tbToggle) return;
-  // remove previous handlers to avoid duplication
-  tbToggle.replaceWith(tbToggle.cloneNode(true));
-  const newToggle = document.getElementById('sidebarToggle');
+  // replace to remove previous handlers
+  const newToggle = tbToggle.cloneNode(true);
+  tbToggle.parentNode.replaceChild(newToggle, tbToggle);
   newToggle.addEventListener('click', ()=> {
     const sb = document.getElementById('sidebar');
     if (!sb) return;
     if (window.matchMedia('(max-width:880px)').matches) {
+      // mobile: toggle overlay open/closed
       sb.classList.toggle('open');
     } else {
+      // desktop: collapse/expand
       sb.classList.toggle('collapsed');
       const contentRoot = document.getElementById('content');
       if (contentRoot) {
@@ -159,12 +182,12 @@ function closeModal(){ const modal=document.getElementById('modal'); if(!modal) 
 document.getElementById('modalClose')?.addEventListener('click', closeModal);
 document.getElementById('modal')?.addEventListener('click', (e)=> { if (e.target === document.getElementById('modal')) closeModal(); });
 
-/* Start: carregar login view inicialmente */
+/* Start: carregar login view inicialmente (clientes será view padrão após login) */
 (async function start(){
   try { await loadView('views/login.html'); } catch(e){ console.error('Falha ao carregar view inicial:', e); }
 })();
 
-/* API exposta para views */
+/* API exposta */
 window.app = {
   injectSidebar,
   loadView,
