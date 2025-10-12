@@ -1,28 +1,244 @@
-<section class="login-view">
-  <div class="login-box">
-    <img class="logo" alt="PANDDA" src="">
-    <h2>Entrar</h2>
+<!-- views/login.html
+     Layout de login refeito: fundo com gradiente, card centralizado com logo genérica,
+     campos de usuário e senha (mesmos IDs usados pelo js/login.js), botão Entrar.
+     Não altera lógica JavaScript; mantém ids: loginPass, toggleEye, btnLogin.
+-->
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Login — PANDDA</title>
+  <style>
+    :root{
+      --bg-1: #0f172a;
+      --bg-2: #1e293b;
+      --card-bg: #ffffff;
+      --card-ink: #0b1220;
+      --accent: #0ea5a4;
+      --muted: #6b7280;
+      --shadow: 0 10px 30px rgba(2,6,23,0.45);
+    }
 
-    <form id="loginForm" class="login-form" onsubmit="return false;">
-      <label class="field centered">
-        <span>Usuário</span>
-        <input id="loginUser" name="user" type="text" autocomplete="username">
-      </label>
+    html,body{
+      height:100%;
+      margin:0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      background: linear-gradient(135deg, var(--bg-1) 0%, #0b1220 40%, rgba(14,165,164,0.08) 100%);
+      color:var(--card-ink);
+    }
 
-      <label class="field centered">
-        <span>Senha</span>
-        <div class="password-row">
-          <input id="loginPass" name="pass" type="password" autocomplete="current-password">
-          <button id="toggleEye" type="button" class="icon-btn">👁️</button>
+    /* Centering container */
+    .page-wrap{
+      min-height:100%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:32px;
+      box-sizing:border-box;
+    }
+
+    /* Card */
+    .login-card{
+      width:100%;
+      max-width:420px;
+      background:var(--card-bg);
+      border-radius:12px;
+      padding:28px 26px;
+      box-shadow:var(--shadow);
+      box-sizing:border-box;
+      position:relative;
+      overflow:hidden;
+    }
+
+    /* subtle top accent bar */
+    .login-card:before{
+      content:"";
+      position:absolute;
+      left:0;
+      top:0;
+      height:6px;
+      width:100%;
+      background:linear-gradient(90deg, rgba(14,165,164,1), rgba(59,130,246,1));
+    }
+
+    .logo-area{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      margin-bottom:18px;
+    }
+
+    .logo-placeholder{
+      width:56px;
+      height:56px;
+      background: linear-gradient(135deg, #eef2ff, #e6fffa);
+      border-radius:10px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:var(--accent);
+      font-weight:700;
+      font-size:18px;
+      border:1px solid rgba(11,18,32,0.04);
+      box-shadow: 0 6px 18px rgba(14,165,164,0.06) inset;
+    }
+
+    .brand-text{
+      display:flex;
+      flex-direction:column;
+    }
+    .brand-text .title{
+      font-size:18px;
+      font-weight:700;
+      color:var(--card-ink);
+      letter-spacing:0.2px;
+    }
+    .brand-text .subtitle{
+      font-size:13px;
+      color:var(--muted);
+      margin-top:2px;
+    }
+
+    /* form */
+    .form-row{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      margin-top:8px;
+    }
+
+    label.field{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      font-size:13px;
+      color:var(--muted);
+    }
+
+    input[type="text"], input[type="password"]{
+      height:44px;
+      padding:10px 12px;
+      font-size:15px;
+      border-radius:8px;
+      border:1px solid rgba(11,18,32,0.08);
+      background:transparent;
+      color:var(--card-ink);
+      outline:none;
+      box-sizing:border-box;
+    }
+    input[type="text"]::placeholder, input[type="password"]::placeholder{
+      color: #9ca3af;
+    }
+
+    .password-row{
+      position:relative;
+    }
+    .toggle-eye{
+      position:absolute;
+      right:10px;
+      top:50%;
+      transform:translateY(-50%);
+      background:transparent;
+      border:0;
+      cursor:pointer;
+      padding:6px;
+      color:var(--muted);
+      font-size:14px;
+    }
+
+    .actions{
+      margin-top:18px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    button.primary{
+      height:44px;
+      border-radius:8px;
+      border:0;
+      background: linear-gradient(90deg,#06b6d4,#3b82f6);
+      color:white;
+      font-weight:700;
+      cursor:pointer;
+      font-size:15px;
+    }
+    button.primary:active{ transform:translateY(1px); }
+
+    .muted-links{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-top:6px;
+      font-size:13px;
+      color:var(--muted);
+    }
+
+    /* small screens */
+    @media (max-width:480px){
+      .login-card{ padding:20px; max-width:360px; }
+      .logo-placeholder{ width:48px; height:48px; font-size:16px; }
+    }
+
+    /* optional decorative background graphic inside page */
+    .bg-decor {
+      position:fixed;
+      right:-120px;
+      bottom:-120px;
+      width:420px;
+      height:420px;
+      background: radial-gradient(circle at 30% 30%, rgba(59,130,246,0.08), transparent 30%),
+                  radial-gradient(circle at 70% 70%, rgba(14,165,164,0.06), transparent 30%);
+      pointer-events:none;
+      filter: blur(8px);
+      z-index:0;
+    }
+
+  </style>
+</head>
+<body>
+  <div class="page-wrap">
+    <div class="login-card" role="main" aria-labelledby="loginTitle" aria-describedby="loginDesc">
+      <div class="logo-area" aria-hidden="false">
+        <div class="logo-placeholder" aria-hidden="true">P</div>
+        <div class="brand-text">
+          <div id="loginTitle" class="title">PANDDA</div>
+          <div id="loginDesc" class="subtitle">Painel administrativo</div>
         </div>
-      </label>
-
-      <div class="login-actions">
-        <button id="btnLogin" class="primary">Entrar</button>
-        <p class="muted">Protótipo: qualquer credencial funciona</p>
       </div>
-    </form>
+
+      <form id="loginForm" onsubmit="return false;" autocomplete="on" novalidate>
+        <div class="form-row">
+          <label class="field">
+            <span>Usuário</span>
+            <input id="loginUser" type="text" name="user" placeholder="seu usuário ou e-mail" required />
+          </label>
+
+          <label class="field password-row">
+            <span>Senha</span>
+            <input id="loginPass" type="password" name="password" placeholder="sua senha" required />
+            <button id="toggleEye" type="button" class="toggle-eye" aria-label="Mostrar senha">👁</button>
+          </label>
+        </div>
+
+        <div class="actions">
+          <button id="btnLogin" class="primary" type="button">Entrar</button>
+
+          <div class="muted-links">
+            <div>Esqueceu a senha?</div>
+            <div style="opacity:0.85;font-size:13px;color:var(--muted)">Versão de teste</div>
+          </div>
+        </div>
+      </form>
+    </div>
   </div>
 
-  <script src="../js/login.js"></script>
-</section>
+  <div class="bg-decor" aria-hidden="true"></div>
+
+  <!-- manter referência ao script da view. Não alterar funcionalidade. -->
+  <script src="js/login.js"></script>
+</body>
+</html>
