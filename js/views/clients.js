@@ -1,7 +1,7 @@
 // js/views/clients.js
-import { getClients, createClient, updateClient, deleteClient } from '../js/mockData.js';
-import { openFormModal } from '../js/modal.js';
-import { getSession } from '../js/auth.js';
+import { getClients, createClient, updateClient, deleteClient } from '../mockData.js';
+import { openFormModal } from '../modal.js';
+import { getSession } from '../auth.js';
 
 function el(tag, text, className) {
   const e = document.createElement(tag);
