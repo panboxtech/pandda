@@ -21,7 +21,8 @@ function seedMockData() {
       phone: `+55 63 9${String(90000000 + i).slice(-8)}`,
       email: `cliente${i}@example.com`,
       dueDate: due.toISOString().slice(0,10),
-      notified: i % 4 === 0
+      notified: i % 4 === 0,
+      blocked: false // novo campo boolean para indicar bloqueio pelo admin
     });
   }
 
@@ -50,8 +51,10 @@ async function ensureMock() {
 
 // Clients
 export async function getClients() { await ensureMock(); return state.clients.map(c=>({...c})); }
-export async function createClient(payload) { await ensureMock(); const id='c'+(state.clients.length+1); const item={id,...payload}; state.clients.push(item); return {...item}; }
+export async function createClient(payload) { await ensureMock(); const id='c'+(state.clients.length+1); const item={id,...payload, blocked:false}; state.clients.push(item); return {...item}; }
 export async function updateClient(id,payload) { await ensureMock(); const i=state.clients.findIndex(c=>c.id===id); if(i===-1) throw new Error('Cliente não encontrado'); state.clients[i]={...state.clients[i],...payload}; return {...state.clients[i]}; }
+// deleteClient permanece para uso por master apenas (mas views para comum não chamarão)
+// incluindo para integração futura com Supabase.
 export async function deleteClient(id) { await ensureMock(); state.clients = state.clients.filter(c=>c.id!==id); return true; }
 
 // Servers
