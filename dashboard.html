@@ -17,18 +17,40 @@
 
   <aside id="sidebar" class="sidebar" role="navigation" aria-label="Menu lateral">
     <div class="sidebar-top">
+      <div class="brand-wrap">
+        <div class="brand">Pandda</div>
+        <div class="spacer"></div>
+      </div>
+      <!-- collapse button moved to the right of the title area (desktop only) -->
       <button id="sidebarCollapse" class="icon-btn desktop-only" aria-label="Minimizar menu">«</button>
-      <div class="brand">Pandda</div>
-      <div class="spacer"></div>
-      <!-- theme button removed from sidebar; desktop floating button placed outside aside -->
     </div>
 
     <nav class="menu" aria-label="Navegação principal">
       <ul>
-        <li><button data-view="clients" class="menu-item">Clientes</button></li>
-        <li><button data-view="servers" class="menu-item">Servidores</button></li>
-        <li><button data-view="plans" class="menu-item">Planos</button></li>
-        <li><button data-view="apps" class="menu-item">Apps</button></li>
+        <li>
+          <button data-view="clients" class="menu-item">
+            <span class="menu-icon" aria-hidden="true">👥</span>
+            <span class="menu-label">Clientes</span>
+          </button>
+        </li>
+        <li>
+          <button data-view="servers" class="menu-item">
+            <span class="menu-icon" aria-hidden="true">🖥️</span>
+            <span class="menu-label">Servidores</span>
+          </button>
+        </li>
+        <li>
+          <button data-view="plans" class="menu-item">
+            <span class="menu-icon" aria-hidden="true">📦</span>
+            <span class="menu-label">Planos</span>
+          </button>
+        </li>
+        <li>
+          <button data-view="apps" class="menu-item">
+            <span class="menu-icon" aria-hidden="true">📱</span>
+            <span class="menu-label">Apps</span>
+          </button>
+        </li>
       </ul>
     </nav>
 
