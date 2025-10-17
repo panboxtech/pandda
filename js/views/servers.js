@@ -3,7 +3,6 @@ import { getServers, createServer, updateServer, deleteServer } from '../mockDat
 import { openFormModal } from '../modal.js';
 import { getSession } from '../auth.js';
 
-
 export async function mountServersView(root) {
   const role = (getSession() || {}).role || 'comum';
 
@@ -36,14 +35,22 @@ export async function mountServersView(root) {
         row.appendChild(left);
         const right = document.createElement('div');
         const edit = document.createElement('button'); edit.className='btn small'; edit.textContent='Editar';
-        edit.addEventListener('click',()=> openEdit(s.id));
-        right.appendChild(edit);
 
+        // regra de permissões: comum NÃO pode editar servidores
         if (role === 'master') {
+          edit.addEventListener('click',()=> openEdit(s.id));
+          right.appendChild(edit);
+
           const del = document.createElement('button'); del.className='btn small ghost'; del.textContent='Excluir';
           del.addEventListener('click',()=> confirmDelete(s.id));
           right.appendChild(del);
+        } else {
+          // comum: apenas adiciona novo servidor (botão "Editar" não exibido)
+          // mostrar apenas um indicador se quiser (opcional)
+          const dash = document.createElement('span'); dash.className='muted'; dash.textContent='';
+          right.appendChild(dash);
         }
+
         row.appendChild(right);
         list.appendChild(row);
       });
@@ -54,6 +61,7 @@ export async function mountServersView(root) {
   }
 
   btnAdd.addEventListener('click', ()=>{
+    // ambos os roles podem adicionar novo servidor (conforme regra)
     openFormModal({
       title: 'Novo servidor',
       renderForm: (container, ctx) => {
@@ -75,6 +83,7 @@ export async function mountServersView(root) {
   });
 
   async function openEdit(id) {
+    // apenas master alcança aqui (ver load logic)
     const items = await getServers();
     const s = items.find(x=>x.id===id);
     if (!s) return;
