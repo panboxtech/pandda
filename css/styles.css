@@ -27,14 +27,15 @@ label{font-size:13px;color:var(--muted);display:block;margin-top:8px}
 .icon-btn{background:transparent;border:0;font-size:18px;cursor:pointer}
 
 /* Layout */
-.sidebar{width:260px;background:var(--panel);height:100vh;position:fixed;left:0;top:0;padding:16px;display:flex;flex-direction:column;transition:width .2s,transform .2s;z-index:30;box-shadow:0 2px 8px var(--shadow)}
-.sidebar.collapsed{width:72px}
-.main-content{margin-left:260px;padding:20px;transition:margin-left .2s;min-height:100vh}
-.sidebar.collapsed + .main-content{margin-left:72px}
+.sidebar{width:260px;background:var(--panel);height:100vh;position:fixed;left:0;top:0;padding:16px;display:flex;flex-direction:column;transition:width .22s,transform .2s;padding-right:8px;z-index:30;box-shadow:0 2px 8px var(--shadow)}
+.sidebar.collapsed{width:64px} /* largura final ajustada para ícones */
+.main-content{margin-left:260px;padding:20px;transition:margin-left .22s;min-height:100vh}
+.sidebar.collapsed + .main-content{margin-left:64px}
 .topbar{height:56px;display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel);box-shadow:0 1px 0 rgba(0,0,0,0.04);position:fixed;left:0;right:0;top:0;z-index:20}
 .topbar .topbar-title{font-weight:600}
-.sidebar-top{display:flex;align-items:center;gap:8px}
-.brand{font-weight:700}
+.sidebar-top{display:flex;align-items:center;gap:8px;justify-content:space-between;margin-bottom:12px}
+.brand-wrap{display:flex;align-items:center;gap:8px;flex:1}
+.brand{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .spacer{flex:1}
 
 /* Quando a sidebar estiver collapsed esconder o título/brand e o spacer (desktop) */
@@ -67,9 +68,20 @@ label{font-size:13px;color:var(--muted);display:block;margin-top:8px}
 .floating-theme { z-index: 50; }
 
 /* Menu */
-.menu ul{list-style:none;padding:0;margin:16px 0 0 0;display:flex;flex-direction:column;gap:6px}
-.menu-item{width:100%;text-align:left;padding:10px;border-radius:8px;border:0;background:transparent;cursor:pointer}
+.menu ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px}
+.menu-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:10px;border-radius:8px;border:0;background:transparent;cursor:pointer}
 .menu-item:hover{background:rgba(0,0,0,0.04)}
+.menu-icon{width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;font-size:16px}
+.menu-label{white-space:nowrap}
+
+/* Quando estiver colapsado: mostrar apenas ícone, esconder label e centralizar */
+.sidebar.collapsed .menu-item{justify-content:center;padding-left:6px;padding-right:6px}
+.sidebar.collapsed .menu-label{display:none}
+
+/* Ajuste de tooltip/accessible label ao colapsar (visual only) */
+.menu-item[title]{position:relative}
+
+/* Footer */
 .sidebar-footer{margin-top:auto;display:flex;flex-direction:column;gap:8px}
 
 /* Views */
@@ -110,5 +122,5 @@ label{font-size:13px;color:var(--muted);display:block;margin-top:8px}
 
 /* Quando a sidebar estiver collapsed, manter largura reduzida */
 .sidebar.collapsed {
-  width: 72px;
+  width: 64px;
 }
