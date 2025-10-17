@@ -1,7 +1,8 @@
 // js/views/servers.js
-import { getServers, createServer, updateServer, deleteServer } from '../js/mockData.js';
-import { openFormModal } from '../js/modal.js';
-import { getSession } from '../js/auth.js';
+import { getServers, createServer, updateServer, deleteServer } from '../mockData.js';
+import { openFormModal } from '../modal.js';
+import { getSession } from '../auth.js';
+
 
 export async function mountServersView(root) {
   const role = (getSession() || {}).role || 'comum';
