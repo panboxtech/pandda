@@ -20,7 +20,7 @@
       <button id="sidebarCollapse" class="icon-btn desktop-only" aria-label="Minimizar menu">«</button>
       <div class="brand">Pandda</div>
       <div class="spacer"></div>
-      <button id="themeToggle" class="btn small">Tema</button>
+      <!-- theme button removed from sidebar; desktop floating button placed outside aside -->
     </div>
 
     <nav class="menu" aria-label="Navegação principal">
@@ -38,6 +38,9 @@
     </div>
   </aside>
 
+  <!-- floating desktop theme button (visible only on desktop) -->
+  <button id="desktopThemeFloating" class="floating-theme desktop-only" aria-label="Alternar tema">🌓</button>
+
   <main id="mainContent" class="main-content" tabindex="-1" role="main">
     <div id="viewRoot" class="view-root"></div>
   </main>
@@ -50,7 +53,6 @@
   <script type="module" src="js/modal.js"></script>
   <script type="module" src="js/mockData.js"></script>
 
-  <!-- Views and app bootstrap (order matters) -->
   <script type="module" src="js/views/clients.js"></script>
   <script type="module" src="js/views/servers.js"></script>
   <script type="module" src="js/views/plans.js"></script>
