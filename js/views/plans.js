@@ -1,6 +1,7 @@
 // js/views/plans.js
-import { getPlans, createPlan, updatePlan, deletePlan } from '../js/mockData.js';
-import { openFormModal } from '../js/modal.js';
+import { getPlans, createPlan, updatePlan, deletePlan } from '../mockData.js';
+import { openFormModal } from '../modal.js';
+
 
 export async function mountPlansView(root) {
   const container = document.createElement('section');
