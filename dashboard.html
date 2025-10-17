@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pandda — Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar mobile-only" role="banner">
+    <button id="mobileMenuToggle" class="icon-btn" aria-label="Abrir menu">☰</button>
+    <div class="topbar-title">Pandda</div>
+    <div class="topbar-actions">
+      <button id="mobileThemeToggle" class="icon-btn" aria-label="Alternar tema">🌓</button>
+    </div>
+  </header>
+
+  <aside id="sidebar" class="sidebar" role="navigation" aria-label="Menu lateral">
+    <div class="sidebar-top">
+      <button id="sidebarCollapse" class="icon-btn desktop-only" aria-label="Minimizar menu">«</button>
+      <div class="brand">Pandda</div>
+      <div class="spacer"></div>
+      <button id="themeToggle" class="btn small">Tema</button>
+    </div>
+
+    <nav class="menu" aria-label="Navegação principal">
+      <ul>
+        <li><button data-view="clients" class="menu-item">Clientes</button></li>
+        <li><button data-view="servers" class="menu-item">Servidores</button></li>
+        <li><button data-view="plans" class="menu-item">Planos</button></li>
+        <li><button data-view="apps" class="menu-item">Apps</button></li>
+      </ul>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div id="userRole" class="muted">Role: —</div>
+      <button id="logoutBtn" class="btn small ghost">Sair</button>
+    </div>
+  </aside>
+
+  <main id="mainContent" class="main-content" tabindex="-1" role="main">
+    <div id="viewRoot" class="view-root"></div>
+  </main>
+
+  <div id="modalRoot" class="modal-root" aria-hidden="true"></div>
+
+  <script type="module" src="js/theme.js"></script>
+  <script type="module" src="js/auth.js"></script>
+  <script type="module" src="js/sidebar.js"></script>
+  <script type="module" src="js/modal.js"></script>
+  <script type="module" src="js/mockData.js"></script>
+
+  <!-- Views and app bootstrap (order matters) -->
+  <script type="module" src="js/views/clients.js"></script>
+  <script type="module" src="js/views/servers.js"></script>
+  <script type="module" src="js/views/plans.js"></script>
+  <script type="module" src="js/views/apps.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
