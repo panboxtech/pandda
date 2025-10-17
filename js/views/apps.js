@@ -1,6 +1,7 @@
 // js/views/apps.js
-import { getApps, createApp, updateApp, deleteApp } from '../js/mockData.js';
-import { openFormModal } from '../js/modal.js';
+import { getApps, createApp, updateApp, deleteApp } from '../mockData.js';
+import { openFormModal } from '../modal.js';
+
 
 export async function mountAppsView(root) {
   const container = document.createElement('section');
