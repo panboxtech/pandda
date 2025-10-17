@@ -44,8 +44,10 @@ logoutBtn && logoutBtn.addEventListener('click', () => {
 
 /**
  * Roteador simples: limpa viewRoot e chama função de montagem da view.
- * Insere um pequeno espaçador no topo de cada view para evitar sobreposição
+ * Insere um espaçador no topo de cada view para evitar sobreposição
  * com o botão flutuante de tema no desktop.
+ *
+ * Ajuste principal: espaçador maior (desktop) para não cobrir botões de ação.
  */
 async function navigateTo(viewKey) {
   const mount = VIEWS[viewKey];
@@ -55,7 +57,9 @@ async function navigateTo(viewKey) {
   // adicionar espaçador no topo (ajustável)
   const topSpacer = document.createElement('div');
   topSpacer.className = 'view-top-spacer';
-  topSpacer.style.height = '12px';
+  // deixamos a altura controlada pelo CSS, mas mantemos um fallback inline para compatibilidade
+  // desktop: valor maior; mobile: 0 (CSS media queries sobrescrevem)
+  topSpacer.style.height = ''; // preferimos controlar via CSS para responsividade
   viewRoot.appendChild(topSpacer);
 
   await mount(viewRoot, { session });
