@@ -42,11 +42,24 @@ logoutBtn && logoutBtn.addEventListener('click', () => {
   signOut();
 });
 
+/**
+ * Roteador simples: limpa viewRoot e chama função de montagem da view.
+ * Insere um pequeno espaçador no topo de cada view para evitar sobreposição
+ * com o botão flutuante de tema no desktop.
+ */
 async function navigateTo(viewKey) {
   const mount = VIEWS[viewKey];
   if (!mount) return;
   while (viewRoot.firstChild) viewRoot.removeChild(viewRoot.firstChild);
+
+  // adicionar espaçador no topo (ajustável)
+  const topSpacer = document.createElement('div');
+  topSpacer.className = 'view-top-spacer';
+  topSpacer.style.height = '12px';
+  viewRoot.appendChild(topSpacer);
+
   await mount(viewRoot, { session });
+
   // focus main content for accessibility
   const main = document.getElementById('mainContent');
   main && main.focus();
