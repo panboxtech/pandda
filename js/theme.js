@@ -1,7 +1,8 @@
 // js/theme.js
 const THEME_KEY = 'pandda_theme';
-const themeToggle = document.getElementById('themeToggle');
-const mobileThemeToggle = document.getElementById('mobileThemeToggle');
+const themeToggle = document.getElementById('themeToggle'); // pode ser undefined
+const mobileThemeToggle = document.getElementById('mobileThemeToggle'); // mobile topbar
+const desktopFloating = document.getElementById('desktopThemeFloating'); // novo botão flutuante
 
 function applyTheme(theme) {
   if (theme === 'dark') {
@@ -23,7 +24,10 @@ function toggleTheme() {
 }
 
 initTheme();
-themeToggle && themeToggle.addEventListener('click', toggleTheme);
-mobileThemeToggle && mobileThemeToggle.addEventListener('click', toggleTheme);
+
+// ligar eventos se os botões existirem
+if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
+if (mobileThemeToggle) mobileThemeToggle.addEventListener('click', toggleTheme);
+if (desktopFloating) desktopFloating.addEventListener('click', toggleTheme);
 
 export { applyTheme, toggleTheme };
