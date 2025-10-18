@@ -305,6 +305,25 @@ label{font-size:13px;color:var(--muted);display:block;margin-top:8px}
 }
 .filter-btn.active { background:var(--accent); color:#fff; border-color:transparent; }
 
+/* Toggle "Não notificados" (checkbox-style) */
+.filter-toggle {
+  margin-left:12px;
+  padding:6px 10px;
+  border-radius:6px;
+  border:1px solid rgba(0,0,0,0.06);
+  background:transparent;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+}
+.filter-toggle.active,
+.filter-toggle[aria-checked="true"] {
+  background:var(--accent);
+  color:#fff;
+  border-color:transparent;
+}
+
 /* Pagination bar */
 .pagination-bar {
   display:flex;
