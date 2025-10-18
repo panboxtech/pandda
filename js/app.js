@@ -1,5 +1,6 @@
 // app.js
-// Bootstrap simples e robusto: carrega CSS base, aguarda DOM e garante existência de #app.
+// Bootstrap robusto: carrega CSS base, garante #app e importa módulos de views usando base path
+// para evitar problemas com caminhos relativos duplicados (ex.: pandda/js/js/...).
 
 // Carrega uma folha de estilo uma única vez (normaliza caminho relativo)
 function loadCssOnce(href) {
@@ -14,10 +15,11 @@ function loadCssOnce(href) {
   document.head.appendChild(link);
 }
 
-// Carregar CSS base imediatamente para evitar flash sem estilo
+// Carregar CSS base cedo
 loadCssOnce('css/styles.css');
+loadCssOnce('css/components/modal.css');
 
-// Aguarda DOM pronto antes de inicializar a aplicação
+// Utility: aguardar DOM pronto
 function onDomReady(fn) {
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', fn);
@@ -26,11 +28,39 @@ function onDomReady(fn) {
   }
 }
 
+// Calcula base URL do script atual (onde este app.js reside) e retorna função para resolver módulos
+const BASE_URL = (() => {
+  // import.meta.url funciona em módulos; retorna a URL completa deste script
+  // Ex.: https://panboxtech.github.io/pandda/js/app.js
+  // Queremos a base para resolver módulos relativos ao diretório do projeto (root do código publicado)
+  try {
+    const url = new URL('.', import.meta.url).href; // diretório onde app.js está
+    // Se seu app.js estiver em /pandda/js/app.js e as views estão em /pandda/js/views/..., você pode:
+    // - usar paths relativos a esse diretório (e.g., new URL('views/login.js', BASE_URL))
+    // - ou usar paths a partir do root do deploy se preferir.
+    return url;
+  } catch (e) {
+    // fallback: use document.currentScript src se import.meta não disponível (raro em type=module)
+    const s = document.currentScript && document.currentScript.src;
+    if (s) return s.replace(/\/[^/]*$/, '/') ;
+    return './';
+  }
+})();
+
+function resolveModulePath(modulePath) {
+  // modulePath expected as something like "views/login.js" or "./views/login.js" or "js/views/login.js"
+  // Normalize to no leading slash
+  const normalized = modulePath.replace(/^\//, '');
+  // If modulePath looks already absolute (contains protocol) just return it
+  if (/^[a-zA-Z0-9-+]+:\/\//.test(normalized)) return normalized;
+  // Resolve relative to BASE_URL
+  return new URL(normalized, BASE_URL).href;
+}
+
 onDomReady(() => {
   const APP_ROOT_SELECTOR = '#app';
   let root = document.querySelector(APP_ROOT_SELECTOR);
 
-  // Se não existir, cria um container #app no body para evitar falha de inicialização
   if (!root) {
     console.warn('[app] elemento #app não encontrado — criando elemento fallback automaticamente');
     root = document.createElement('div');
@@ -38,13 +68,14 @@ onDomReady(() => {
     document.body.appendChild(root);
   }
 
-  // Roteamento mínimo para demonstração (substitua/expanda conforme necessário)
+  // Defina as rotas usando caminhos relativos AO DIRETÓRIO DE BASE do app.js.
+  // Ex.: se suas views estão em js/views/login.js relativo ao app.js, use 'views/login.js' abaixo.
+  // Ajuste conforme sua estrutura real.
   const routes = {
-    '/': { module: 'js/views/login.js', mount: 'mountLoginView' },
-    '/clients': { module: 'js/views/clients.js', mount: 'mountClientsView' },
+    '/': { module: 'views/login.js', mount: 'mountLoginView' },
+    '/clients': { module: 'views/clients.js', mount: 'mountClientsView' },
   };
 
-  // Limpa o root (simple unmount)
   function clearRoot() {
     root.innerHTML = '';
     const modalRoot = document.querySelector('.modal-root');
@@ -55,16 +86,17 @@ onDomReady(() => {
     }
   }
 
-  // Navega para uma rota; carrega o módulo dinamicamente
   async function navigateTo(path, replace = false) {
     const route = routes[path] || routes['/'];
     try {
       console.log('[navigateTo]', path);
       clearRoot();
-      const mod = await import(`./${route.module}`);
+      const moduleUrl = resolveModulePath(route.module);
+      // dynamic import by absolute/fully resolved URL
+      const mod = await import(moduleUrl);
       const mountFn = mod[route.mount];
       if (typeof mountFn !== 'function') {
-        console.error('[navigateTo] mount function not found in', route.module, route.mount);
+        console.error('[navigateTo] mount function not found in', moduleUrl, route.mount);
         root.innerHTML = `<div style="padding:16px;color:#b91c1c">Erro ao carregar a página. Veja o console.</div>`;
         return;
       }
@@ -86,19 +118,16 @@ onDomReady(() => {
     navigateTo(href);
   });
 
-  // Voltar / avançar
   window.addEventListener('popstate', (e) => {
     const path = (e.state && e.state.path) || location.pathname || '/';
     navigateTo(path, true);
   });
 
-  // Inicialização: navega para a rota atual
   (async function bootstrap() {
     const initialPath = location.pathname || '/';
-    console.log('[app] bootstrap initialPath=', initialPath);
+    console.log('[app] bootstrap initialPath=', initialPath, 'BASE_URL=', BASE_URL);
     await navigateTo(initialPath, true);
   })().catch(err => console.error('[app] bootstrap error', err));
 
-  // Expor função para navegação manual se necessário
   window.appNavigateTo = navigateTo;
 });
