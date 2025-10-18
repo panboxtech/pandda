@@ -1,5 +1,8 @@
 // js/views/clients.js
-// View de Clientes com filtro cliente-side de fallback e logs mínimos
+// View de Clientes com filtro cliente-side robusto: quando um filtro está ativo,
+// buscamos o conjunto completo, aplicamos o filtro localmente e então paginamos.
+// Integra com clientForm em js/forms/clientForm.js
+
 import {
   getClients,
   createClient,
@@ -102,7 +105,6 @@ export async function mountClientsView(root) {
       b.setAttribute('aria-pressed', 'true');
       currentFilter = f.key;
       currentPage = 1;
-      console.log('[filters] applying filter (clicked):', currentFilter);
       loadAndRender();
     });
 
@@ -183,87 +185,100 @@ export async function mountClientsView(root) {
       row.appendChild(right);
       list.appendChild(row);
     });
-    // force repaint in some browsers after DOM update
-    list.offsetHeight;
+    // força repintura
+    void list.offsetHeight;
   }
 
-  // fallback client-side filter implementation
+  // filtro client-side (retorna array filtrado)
   function applyClientSideFilter(items) {
-    if (!items || !items.length) return items;
+    if (!items || !items.length) return [];
+    const now = new Date();
     if (currentFilter === 'todos') return items;
     if (currentFilter === 'bloqueados') return items.filter(i => Boolean(i.blocked));
     if (currentFilter === 'vencendo') {
-      // vencendo ≤ 3 dias: assume campo validade is ISO date
-      const now = new Date();
       return items.filter(i => {
         if (!i.validade) return false;
         const d = new Date(i.validade);
-        const diffDays = Math.ceil((d - now) / (1000*60*60*24));
+        const diffDays = Math.ceil((d - now) / (1000 * 60 * 60 * 24));
         return diffDays >= 0 && diffDays <= 3;
       });
     }
     if (currentFilter === 'vencidos_30_less') {
-      const now = new Date();
       return items.filter(i => {
         if (!i.validade) return false;
         const d = new Date(i.validade);
-        const diffDays = Math.ceil((now - d) / (1000*60*60*24));
+        const diffDays = Math.ceil((now - d) / (1000 * 60 * 60 * 24));
         return diffDays > 0 && diffDays < 30;
       });
     }
     if (currentFilter === 'vencidos_30_plus') {
-      const now = new Date();
       return items.filter(i => {
         if (!i.validade) return false;
         const d = new Date(i.validade);
-        const diffDays = Math.ceil((now - d) / (1000*60*60*24));
+        const diffDays = Math.ceil((now - d) / (1000 * 60 * 60 * 24));
         return diffDays >= 30;
       });
     }
     return items;
   }
 
-  // Load and render (uses fallback filter if API response doesn't reflect filter)
+  // paginação local (recebe array completo filtrado)
+  function paginate(items, page, pageSize) {
+    const from = (page - 1) * pageSize;
+    return items.slice(from, from + pageSize);
+  }
+
+  // Load and render: quando filtro != todos, buscar dataset completo e aplicar filtro+paginação localmente
   async function loadAndRender() {
-    console.log('[loadAndRender] start', { currentFilter, currentNotNotified, currentSearch, currentSort, currentPage, currentPageSize });
     feedback.textContent = 'Carregando...';
     try {
-      const resp = await getClients({
-        page: currentPage,
-        pageSize: currentPageSize,
-        filter: currentFilter,
-        search: currentSearch,
-        sort: currentSort,
-        notNotified: currentNotNotified
-      });
-
-      // resp.items may already be filtered server-side; if not, apply client-side fallback
-      let items = Array.isArray(resp.items) ? resp.items.slice() : [];
-      const beforeCount = items.length;
-      const afterFilter = applyClientSideFilter(items);
-      // if applying the filter changed the result set size or keys, use filtered set
-      items = afterFilter;
-      totalItems = resp.total || items.length;
-      totalPages = Math.max(1, Math.ceil(totalItems / currentPageSize));
-
-      renderList(items);
-      feedback.textContent = `Mostrando página ${currentPage} de ${totalPages}`;
-      pageInfo.textContent = `Mostrando ${items.length} de ${totalItems} clientes`;
+      // se filtro é 'todos' ou backend suporta notNotified/search/pagination corretamente, pedir página normal
+      if (currentFilter === 'todos') {
+        const resp = await getClients({
+          page: currentPage,
+          pageSize: currentPageSize,
+          filter: currentFilter,
+          search: currentSearch,
+          sort: currentSort,
+          notNotified: currentNotNotified
+        });
+        const items = Array.isArray(resp.items) ? resp.items : [];
+        totalItems = resp.total || items.length;
+        totalPages = Math.max(1, Math.ceil(totalItems / currentPageSize));
+        renderList(items);
+        pageInfo.textContent = `Mostrando ${items.length} de ${totalItems} clientes`;
+      } else {
+        // fallback: buscar todo o conjunto para garantir que o filtro encontre itens em qualquer página
+        const respAll = await getClients({
+          page: 1,
+          pageSize: 1000, // assume que 1000 é suficiente; ajuste conforme necessário
+          filter: 'todos',
+          search: currentSearch,
+          sort: currentSort,
+          notNotified: currentNotNotified
+        });
+        let itemsAll = Array.isArray(respAll.items) ? respAll.items.slice() : [];
+        // aplicar filtro client-side
+        const filtered = applyClientSideFilter(itemsAll);
+        totalItems = filtered.length;
+        totalPages = Math.max(1, Math.ceil(totalItems / currentPageSize));
+        const pageItems = paginate(filtered, currentPage, currentPageSize);
+        renderList(pageItems);
+        pageInfo.textContent = `Mostrando ${pageItems.length} de ${totalItems} clientes (filtro: ${currentFilter})`;
+      }
 
       prevBtn.disabled = currentPage <= 1;
       nextBtn.disabled = currentPage >= totalPages;
       pageInput.value = currentPage;
       notifiedToggle.setAttribute('aria-checked', String(currentNotNotified));
       notifiedToggle.classList.toggle('active', currentNotNotified);
-
-      console.log('[loadAndRender] done', { returned: items.length, totalItems, serverReturned: beforeCount });
     } catch (err) {
       feedback.textContent = 'Erro ao carregar clientes: ' + (err?.message || String(err));
       console.error('[loadAndRender] error', err);
     }
   }
 
-  // Events and pagination
+  // Eventos e paginação
   function debounce(fn, wait = 200) { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), wait); }; }
   searchInput.addEventListener('input', debounce(() => { currentSearch = searchInput.value.trim(); currentPage = 1; loadAndRender(); }, 300));
   sortSelect.addEventListener('change', () => { currentSort = sortSelect.value; currentPage = 1; loadAndRender(); });
@@ -274,7 +289,6 @@ export async function mountClientsView(root) {
     notifiedToggle.setAttribute('aria-checked', String(currentNotNotified));
     notifiedToggle.classList.toggle('active', currentNotNotified);
     currentPage = 1;
-    console.log('[notifiedToggle] toggled, currentNotNotified=', currentNotNotified);
     loadAndRender();
   });
 
@@ -289,6 +303,7 @@ export async function mountClientsView(root) {
       renderForm: (container, ctx) => renderClientForm(container, ctx, null),
       onConfirm: async (data) => {
         await createClient(data);
+        currentPage = 1;
         await loadAndRender();
       }
     }).catch(() => {});
@@ -309,7 +324,6 @@ export async function mountClientsView(root) {
   }
 
   // Inicial
-  console.log('[mountClientsView] initializing view');
   await loadAndRender();
   root.appendChild(container);
 }
