@@ -3,34 +3,20 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Pandda — Login</title>
-  <link rel="stylesheet" href="css/styles.css">
+  <title>Painel</title>
+  <!-- Nota: o carregamento do CSS base é feito em app.js -->
 </head>
-<body class="page-login">
-  <main class="login-container">
-    <div class="login-card" role="main" aria-labelledby="loginTitle">
-      <h1 id="loginTitle">Pandda</h1>
-      <form id="loginForm" novalidate>
-        <label for="email">Email</label>
-        <input id="email" type="email" required autocomplete="username" />
+<body>
+  <!-- Container principal da aplicação. app.js também criará automaticamente se faltar. -->
+  <div id="app"></div>
 
-        <label for="password">Senha</label>
-        <input id="password" type="password" required autocomplete="current-password" />
+  <!-- Modal root compartilhado (opcional, mas recomendado se usar modais) -->
+  <div class="modal-root" id="modal-root" aria-hidden="true" style="display:none">
+    <div class="modal-overlay"></div>
+    <div class="modal" role="dialog" aria-modal="true"></div>
+  </div>
 
-        <div class="login-actions">
-          <button id="loginBtn" type="submit" class="btn primary">Entrar</button>
-          <button id="demoBtn" type="button" class="btn ghost">Entrar com demo</button>
-        </div>
-
-        <div id="loginFeedback" class="feedback" aria-live="polite"></div>
-      </form>
-
-      <footer class="login-footer muted">
-        <small>Projeto protótipo — pronto para integrar com Supabase</small>
-      </footer>
-    </div>
-  </main>
-
-  <script type="module" src="js/auth.js"></script>
+  <!-- Bootstrap da aplicação -->
+  <script type="module" src="./app.js" defer></script>
 </body>
 </html>
