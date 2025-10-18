@@ -41,6 +41,7 @@ export async function mountClientsView(root) {
   // Toolbar
   const toolbar = document.createElement('div');
   toolbar.className = 'client-toolbar';
+
   const searchInput = document.createElement('input');
   searchInput.type = 'search';
   searchInput.placeholder = 'Buscar por nome, telefone ou email';
@@ -54,7 +55,7 @@ export async function mountClientsView(root) {
   toolbar.appendChild(sortSelect);
 
   const pageSizeSelect = document.createElement('select');
-  [10, 25, 50, 100].forEach(n => {
+  [10, 12, 25, 50, 100].forEach(n => {
     const o = document.createElement('option');
     o.value = String(n);
     o.textContent = `${n} por página`;
@@ -68,6 +69,7 @@ export async function mountClientsView(root) {
   // Filtros
   const filtersWrap = document.createElement('div');
   filtersWrap.className = 'filters-wrap';
+
   const filters = document.createElement('div');
   filters.className = 'client-filters';
 
@@ -106,18 +108,38 @@ export async function mountClientsView(root) {
   // Paginação
   const paginationBar = document.createElement('div');
   paginationBar.className = 'pagination-bar';
+
   const pageInfo = document.createElement('div');
   pageInfo.className = 'page-info muted';
   paginationBar.appendChild(pageInfo);
 
   const paginationControls = document.createElement('div');
   paginationControls.className = 'pagination-controls';
-  const prevBtn = document.createElement('button'); prevBtn.className = 'btn small'; prevBtn.textContent = 'Anterior';
-  const nextBtn = document.createElement('button'); nextBtn.className = 'btn small'; nextBtn.textContent = 'Próximo';
-  const pageInput = document.createElement('input'); pageInput.type = 'number'; pageInput.min = '1'; pageInput.className = 'page-input'; pageInput.style.width = '60px';
-  const gotoBtn = document.createElement('button'); gotoBtn.className = 'btn small'; gotoBtn.textContent = 'Ir';
-  paginationControls.appendChild(prevBtn); paginationControls.appendChild(pageInput); paginationControls.appendChild(gotoBtn); paginationControls.appendChild(nextBtn);
+
+  const prevBtn = document.createElement('button');
+  prevBtn.className = 'btn small';
+  prevBtn.textContent = 'Anterior';
+
+  const pageInput = document.createElement('input');
+  pageInput.type = 'number';
+  pageInput.min = '1';
+  pageInput.className = 'page-input';
+  pageInput.style.width = '60px';
+
+  const gotoBtn = document.createElement('button');
+  gotoBtn.className = 'btn small';
+  gotoBtn.textContent = 'Ir';
+
+  const nextBtn = document.createElement('button');
+  nextBtn.className = 'btn small';
+  nextBtn.textContent = 'Próximo';
+
+  paginationControls.appendChild(prevBtn);
+  paginationControls.appendChild(pageInput);
+  paginationControls.appendChild(gotoBtn);
+  paginationControls.appendChild(nextBtn);
   paginationBar.appendChild(paginationControls);
+
   container.appendChild(paginationBar);
 
   // Feedback
@@ -134,31 +156,35 @@ export async function mountClientsView(root) {
   let totalItems = 0;
   let totalPages = 1;
 
-  // Render list
+  // Render da lista
   function renderList(items) {
     list.innerHTML = '';
     if (!items || items.length === 0) {
-      list.appendChild(el('div','Nenhum cliente encontrado.'));
+      list.appendChild(el('div', 'Nenhum cliente encontrado.'));
       return;
     }
     items.forEach(c => {
-      const row = document.createElement('div'); row.className = 'list-row';
+      const row = document.createElement('div');
+      row.className = 'list-row';
+
       const left = document.createElement('div');
       left.appendChild(el('div', `${c.nome} ${c.blocked ? '(Bloqueado)' : ''}`, 'list-title'));
-      left.appendChild(el('div', `Plano: ${c.planoId || '—'} • Telas: ${c.telas} • Servidores: ${(c.servidores||[]).join(', ')}`, 'muted'));
+      left.appendChild(el('div', `Plano: ${c.planoId || '—'} • Telas: ${c.telas} • Servidores: ${(c.servidores || []).join(', ')}`, 'muted'));
       row.appendChild(left);
 
       const right = document.createElement('div');
-      const editBtn = document.createElement('button'); editBtn.className = 'btn small'; editBtn.textContent = 'Editar';
+      const editBtn = document.createElement('button');
+      editBtn.className = 'btn small';
+      editBtn.textContent = 'Editar';
       editBtn.addEventListener('click', () => openEdit(c.id));
       right.appendChild(editBtn);
-      row.appendChild(right);
 
+      row.appendChild(right);
       list.appendChild(row);
     });
   }
 
-  // Load
+  // Carregar e renderizar
   async function loadAndRender() {
     feedback.textContent = 'Carregando...';
     try {
@@ -170,14 +196,18 @@ export async function mountClientsView(root) {
         sort: currentSort,
         notNotified: currentNotNotified
       });
+
       totalItems = resp.total || 0;
       totalPages = Math.max(1, Math.ceil(totalItems / currentPageSize));
+
       renderList(resp.items);
       feedback.textContent = `Mostrando página ${currentPage} de ${totalPages}`;
       pageInfo.textContent = `Mostrando ${resp.items.length} de ${totalItems} clientes`;
+
       prevBtn.disabled = currentPage <= 1;
       nextBtn.disabled = currentPage >= totalPages;
       pageInput.value = currentPage;
+
       notifiedToggle.setAttribute('aria-checked', String(currentNotNotified));
       notifiedToggle.classList.toggle('active', currentNotNotified);
     } catch (err) {
@@ -186,17 +216,40 @@ export async function mountClientsView(root) {
   }
 
   // Eventos
-  function debounce(fn, wait=200) { let t; return (...args) => { clearTimeout(t); t = setTimeout(()=>fn(...args), wait); }; }
-  searchInput.addEventListener('input', debounce(() => { currentSearch = searchInput.value.trim(); currentPage = 1; loadAndRender(); }, 300));
-  sortSelect.addEventListener('change', () => { currentSort = sortSelect.value; currentPage = 1; loadAndRender(); });
-  pageSizeSelect.addEventListener('change', () => { currentPageSize = Number(pageSizeSelect.value)||12; currentPage = 1; loadAndRender(); });
+  function debounce(fn, wait = 200) {
+    let t;
+    return (...args) => {
+      clearTimeout(t);
+      t = setTimeout(() => fn(...args), wait);
+    };
+  }
+
+  searchInput.addEventListener('input', debounce(() => {
+    currentSearch = searchInput.value.trim();
+    currentPage = 1;
+    loadAndRender();
+  }, 300));
+
+  sortSelect.addEventListener('change', () => {
+    currentSort = sortSelect.value;
+    currentPage = 1;
+    loadAndRender();
+  });
+
+  pageSizeSelect.addEventListener('change', () => {
+    currentPageSize = Number(pageSizeSelect.value) || 12;
+    currentPage = 1;
+    loadAndRender();
+  });
 
   filters.addEventListener('click', (e) => {
     if (!(e.target instanceof HTMLElement)) return;
     const f = e.target.dataset.filter;
     if (!f) return;
+
     filters.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
     e.target.classList.add('active');
+
     currentFilter = f;
     currentPage = 1;
     loadAndRender();
@@ -210,4 +263,57 @@ export async function mountClientsView(root) {
     loadAndRender();
   });
 
-  prevBtn.addEventListener('click', () => { if (currentPage > 1) { currentPage
+  prevBtn.addEventListener('click', () => {
+    if (currentPage > 1) {
+      currentPage--;
+      loadAndRender();
+    }
+  });
+
+  nextBtn.addEventListener('click', () => {
+    if (currentPage < totalPages) {
+      currentPage++;
+      loadAndRender();
+    }
+  });
+
+  gotoBtn.addEventListener('click', () => {
+    const v = Math.max(1, Math.min(totalPages, Number(pageInput.value) || 1));
+    if (v !== currentPage) {
+      currentPage = v;
+      loadAndRender();
+    }
+  });
+
+  // CRUD: criar / editar
+  btnAdd.addEventListener('click', () => {
+    openFormModal({
+      title: 'Novo cliente',
+      renderForm: (container, ctx) => renderClientForm(container, ctx, null),
+      onConfirm: async (data) => {
+        await createClient(data);
+        await loadAndRender();
+      }
+    }).catch(() => {});
+  });
+
+  async function openEdit(id) {
+    // busca rápida (carrega uma página grande para encontrar o item)
+    const resp = await getClients({ page: 1, pageSize: 1000 });
+    const item = resp.items.find(x => x.id === id);
+    if (!item) return;
+
+    openFormModal({
+      title: 'Editar cliente',
+      renderForm: (container, ctx) => renderClientForm(container, ctx, item),
+      onConfirm: async (data) => {
+        await updateClient(id, data);
+        await loadAndRender();
+      }
+    }).catch(() => {});
+  }
+
+  // Inicial
+  await loadAndRender();
+  root.appendChild(container);
+}
