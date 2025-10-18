@@ -298,8 +298,17 @@ label{font-size:13px;color:var(--muted);display:block;margin-top:8px}
   color:var(--text);
 }
 
+/* Wrap dos filtros + toggle: adiciona espaçamento inferior para separar da listagem */
+.filters-wrap {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-bottom:16px; /* ajuste fino: espaço entre toggle e listagem */
+  flex-wrap:wrap;
+}
+
 /* Filters (visual active) */
-.client-filters { display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px; }
+.client-filters { display:flex;flex-wrap:wrap;gap:8px;margin-bottom:0; } /* margin-bottom removido aqui pois usamos .filters-wrap */
 .filter-btn {
   padding:6px 10px;border-radius:6px;border:1px solid rgba(0,0,0,0.06);background:transparent;cursor:pointer;
 }
