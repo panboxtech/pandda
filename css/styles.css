@@ -222,15 +222,36 @@ label{font-size:13px;color:var(--muted);display:block;margin-top:8px}
 .list-title{font-weight:600}
 
 /* ---------- Modal (centralizado e acessível) ---------- */
+/* Modal: escondido por padrão; active torna visível e captura eventos */
 .modal-root{
   position:fixed;
   inset:0;
-  display:flex;
+  display:none; /* escondido por padrão para não bloquear a página */
   align-items:center;
   justify-content:center;
   z-index:70;
+  pointer-events:none; /* não captura cliques enquanto não ativo */
 }
-.modal-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.32)}
+.modal-root.active{
+  display:flex;
+  pointer-events:auto; /* habilita interação quando ativo */
+}
+
+/* overlay */
+.modal-overlay{
+  position:absolute;
+  inset:0;
+  background:rgba(0,0,0,0.32);
+  opacity:0;
+  transition:opacity .12s ease;
+  pointer-events:none;
+}
+.modal-root.active .modal-overlay{
+  opacity:1;
+  pointer-events:auto;
+}
+
+/* modal box */
 .modal{
   background:var(--panel);
   padding:16px;
@@ -243,8 +264,17 @@ label{font-size:13px;color:var(--muted);display:block;margin-top:8px}
   z-index:2;
   max-height:80vh;
   overflow:auto;
+  transform:translateY(-6px);
+  transition:transform .12s ease, opacity .12s ease;
+  opacity:0;
 }
-.modal h3{margin:0 0 8px 0}
+.modal-root.active .modal{
+  transform:none;
+  opacity:1;
+}
+
+/* acessibilidade e foco */
+.modal:focus { outline: none; }
 
 /* modal content */
 .modal-content{display:block}
