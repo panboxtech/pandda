@@ -1,8 +1,5 @@
 // js/views/clients.js
-// View de Clientes com filtro cliente-side robusto: quando um filtro está ativo,
-// buscamos o conjunto completo, aplicamos o filtro localmente e então paginamos.
-// Integra com clientForm em js/forms/clientForm.js
-
+// Monta a view de clientes e carrega dinamicamente os CSS específicos desta view
 import {
   getClients,
   createClient,
@@ -18,7 +15,22 @@ function el(tag, text, className) {
   return e;
 }
 
+/* Utility: carregar CSS dinamicamente (evita carregar tudo globalmente) */
+function loadCssOnce(href) {
+  if (document.querySelector(`link[data-dyn-href="${href}"]`)) return;
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = href;
+  link.setAttribute('data-dyn-href', href);
+  document.head.appendChild(link);
+}
+
 export async function mountClientsView(root) {
+  // carregar CSS específicos para esta view
+  loadCssOnce('/css/views/clients.css');
+  loadCssOnce('/css/forms/clientForm.css');
+  loadCssOnce('/css/components/modal.css');
+
   const container = document.createElement('section');
   container.className = 'view view-clients';
 
@@ -67,19 +79,14 @@ export async function mountClientsView(root) {
   // Filtros
   const filtersWrap = document.createElement('div');
   filtersWrap.className = 'filters-wrap';
-  filtersWrap.style.position = 'relative';
-  filtersWrap.style.zIndex = '80';
-  filtersWrap.style.pointerEvents = 'auto';
 
   const filters = document.createElement('div');
   filters.className = 'client-filters';
-  filters.style.pointerEvents = 'auto';
-  filters.style.zIndex = '81';
 
   const filterDefs = [
     { key: 'todos', label: 'Todos' },
     { key: 'vencendo', label: 'Vencendo (≤3d)' },
-    { key: 'vencidos_30_less', label: 'Vencidos <30d' },
+    { key: 'vencidos_40_less', label: 'Vencidos <30d' },
     { key: 'vencidos_30_plus', label: 'Vencidos ≥30d' },
     { key: 'bloqueados', label: 'Bloqueados' }
   ];
@@ -164,7 +171,6 @@ export async function mountClientsView(root) {
   let totalItems = 0;
   let totalPages = 1;
 
-  // Render da lista
   function renderList(items) {
     list.innerHTML = '';
     if (!items || items.length === 0) {
@@ -185,11 +191,9 @@ export async function mountClientsView(root) {
       row.appendChild(right);
       list.appendChild(row);
     });
-    // força repintura
     void list.offsetHeight;
   }
 
-  // filtro client-side (retorna array filtrado)
   function applyClientSideFilter(items) {
     if (!items || !items.length) return [];
     const now = new Date();
@@ -203,37 +207,28 @@ export async function mountClientsView(root) {
         return diffDays >= 0 && diffDays <= 3;
       });
     }
-    if (currentFilter === 'vencidos_30_less') {
+    if (currentFilter === 'vencidos_40_less' || currentFilter === 'vencidos_30_plus') {
+      const days = currentFilter === 'vencidos_40_less' ? 30 : 30;
       return items.filter(i => {
         if (!i.validade) return false;
         const d = new Date(i.validade);
         const diffDays = Math.ceil((now - d) / (1000 * 60 * 60 * 24));
-        return diffDays > 0 && diffDays < 30;
-      });
-    }
-    if (currentFilter === 'vencidos_30_plus') {
-      return items.filter(i => {
-        if (!i.validade) return false;
-        const d = new Date(i.validade);
-        const diffDays = Math.ceil((now - d) / (1000 * 60 * 60 * 24));
-        return diffDays >= 30;
+        return diffDays > 0 && diffDays < days;
       });
     }
     return items;
   }
 
-  // paginação local (recebe array completo filtrado)
   function paginate(items, page, pageSize) {
     const from = (page - 1) * pageSize;
     return items.slice(from, from + pageSize);
   }
 
-  // Load and render: quando filtro != todos, buscar dataset completo e aplicar filtro+paginação localmente
   async function loadAndRender() {
     feedback.textContent = 'Carregando...';
     try {
-      // se filtro é 'todos' ou backend suporta notNotified/search/pagination corretamente, pedir página normal
-      if (currentFilter === 'todos') {
+      // se filtro é 'todos' ou notNotified, pedimos server-side com paginação
+      if (currentFilter === 'todos' || currentNotNotified) {
         const resp = await getClients({
           page: currentPage,
           pageSize: currentPageSize,
@@ -248,17 +243,16 @@ export async function mountClientsView(root) {
         renderList(items);
         pageInfo.textContent = `Mostrando ${items.length} de ${totalItems} clientes`;
       } else {
-        // fallback: buscar todo o conjunto para garantir que o filtro encontre itens em qualquer página
+        // fallback: buscar conjunto maior para filtros que precisam de contexto (ativo/recentes)
         const respAll = await getClients({
           page: 1,
-          pageSize: 1000, // assume que 1000 é suficiente; ajuste conforme necessário
+          pageSize: 1000,
           filter: 'todos',
           search: currentSearch,
           sort: currentSort,
           notNotified: currentNotNotified
         });
         let itemsAll = Array.isArray(respAll.items) ? respAll.items.slice() : [];
-        // aplicar filtro client-side
         const filtered = applyClientSideFilter(itemsAll);
         totalItems = filtered.length;
         totalPages = Math.max(1, Math.ceil(totalItems / currentPageSize));
@@ -278,7 +272,6 @@ export async function mountClientsView(root) {
     }
   }
 
-  // Eventos e paginação
   function debounce(fn, wait = 200) { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), wait); }; }
   searchInput.addEventListener('input', debounce(() => { currentSearch = searchInput.value.trim(); currentPage = 1; loadAndRender(); }, 300));
   sortSelect.addEventListener('change', () => { currentSort = sortSelect.value; currentPage = 1; loadAndRender(); });
@@ -296,7 +289,6 @@ export async function mountClientsView(root) {
   nextBtn.addEventListener('click', () => { if (currentPage < totalPages) { currentPage++; loadAndRender(); } });
   gotoBtn.addEventListener('click', () => { const v = Math.max(1, Math.min(totalPages, Number(pageInput.value) || 1)); if (v !== currentPage) { currentPage = v; loadAndRender(); } });
 
-  // CRUD
   btnAdd.addEventListener('click', () => {
     openFormModal({
       title: 'Novo cliente',
@@ -323,7 +315,6 @@ export async function mountClientsView(root) {
     }).catch(() => {});
   }
 
-  // Inicial
   await loadAndRender();
   root.appendChild(container);
 }
