@@ -17,13 +17,20 @@ function el(tag, text, className) {
 
 /* Utility: carregar CSS dinamicamente (evita carregar tudo globalmente) */
 function loadCssOnce(href) {
-  if (document.querySelector(`link[data-dyn-href="${href}"]`)) return;
+  // Normaliza para caminho relativo ao documento atual (evita leading slash que quebra em GH Pages)
+  const normalized = href.replace(/^\//, '');
+  // evita múltiplos inserts
+  if (document.querySelector(`link[data-dyn-href="${normalized}"]`)) return;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = href;
-  link.setAttribute('data-dyn-href', href);
+  link.href = normalized;
+  link.setAttribute('data-dyn-href', normalized);
+  // logging útil para depuração
+  link.addEventListener('load', () => console.log('[loadCssOnce] loaded', normalized));
+  link.addEventListener('error', (e) => console.error('[loadCssOnce] failed to load', normalized, e));
   document.head.appendChild(link);
 }
+
 
 export async function mountClientsView(root) {
   // carregar CSS específicos para esta view
