@@ -1,18 +1,13 @@
 // js/mockData.js
 // Mock de dados em memória com API CRUD e suporte a paginação/search/filter/sort.
 // Assinatura principal:
-//   getClients({ page = 1, pageSize = 12, filter, search, sort } = {}) =>
+//   getClients({ page = 1, pageSize = 12, filter, search, sort, notNotified } = {}) =>
 //     { items: Client[], total: number, page, pageSize }
 //
-// Quando integrar com Supabase, substitua a implementação de getClients para:
-//   const { data, count, error } = await supabase
-//     .from('clients')
-//     .select('*', { count: 'exact' })
-//     .ilike('name', `%${search}%`) // exemplo de filtro de busca
-//     .order(sortField, { ascending: true/false })
-//     .range((page-1)*pageSize, page*pageSize - 1)
-//
-// Mantive as funções CRUD com assinaturas compatíveis (createClient, updateClient, deleteClient).
+// Comentário para Supabase:
+// Substitua a implementação de getClients por uma query supabase usando .select(..., { count: 'exact' })
+// e .range((page-1)*pageSize, page*pageSize-1). Aplique filtros no servidor (ilike, eq, lt, gt).
+// Mantenha a assinatura de retorno { items, total, page, pageSize }.
 
 const state = {
   clients: [],
@@ -63,19 +58,27 @@ async function ensureMock() {
 
 /**
  * getClients - retorna página com items + metadados
- * opts: { page = 1, pageSize = 12, filter, search, sort }
+ * opts: { page = 1, pageSize = 12, filter, search, sort, notNotified }
  * filter: 'todos'|'vencendo'|'vencidos_30_less'|'vencidos_30_plus'|'notificados'|'bloqueados'
- * search: string (busca por name ou phone)
- * sort: 'dueDate'|'name' (ascendente por padrão)
+ * notNotified: boolean (quando true filtra items where notified === false)
+ * search: string (busca por name, phone, email)
+ * sort: 'dueDate'|'name'
  */
 export async function getClients(opts = {}) {
   await ensureMock();
-  const { page = 1, pageSize = 12, filter = 'todos', search = '', sort = 'dueDate' } = opts;
+  const {
+    page = 1,
+    pageSize = 12,
+    filter = 'todos',
+    search = '',
+    sort = 'dueDate',
+    notNotified = false
+  } = opts;
 
   // clone array para não mutar o estado
   let items = state.clients.map(c => ({ ...c }));
 
-  // aplicar filtro por status
+  // aplicar filtro por status (mutuamente exclusivo)
   if (filter && filter !== 'todos') {
     const today = new Date();
     const daysUntil = (dateStr) => {
@@ -105,7 +108,12 @@ export async function getClients(opts = {}) {
     }
   }
 
-  // busca (por nome e telefone)
+  // filtro global complementar: notNotified (aplica em conjunto com status)
+  if (notNotified) {
+    items = items.filter(c => !c.notified);
+  }
+
+  // busca (por nome, telefone, email)
   const q = String(search || '').trim().toLowerCase();
   if (q) {
     items = items.filter(c => {
