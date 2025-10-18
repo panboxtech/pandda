@@ -1,0 +1,8 @@
+/* Modal component */
+.modal-root{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:100;pointer-events:none}
+.modal-root.active{display:flex;pointer-events:auto}
+.modal-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.32);opacity:0;transition:opacity .12s ease;pointer-events:none}
+.modal-root.active .modal-overlay{opacity:1;pointer-events:auto}
+.modal{background:var(--panel);padding:16px;border-radius:10px;min-width:320px;max-width:720px;width:min(92%,720px);box-shadow:0 8px 40px var(--shadow);position:relative;z-index:101;max-height:80vh;overflow:auto;transform:translateY(-6px);transition:transform .12s ease, opacity .12s ease;opacity:0}
+.modal-root.active .modal{transform:none;opacity:1}
+.modal .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
