@@ -1,10 +1,5 @@
 // js/views/clients.js
-// View de Clientes com:
-// - toolbar (busca, ordenação, pageSize)
-// - filtros de status e toggle "Não notificados"
-// - listagem e paginação
-// - integração com formulário de cliente extraído em js/forms/clientForm.js
-
+// View de Clientes com filtros corrigidos (cada botão tem listener individual, mesma lógica do toggle)
 import {
   getClients,
   createClient,
@@ -80,12 +75,33 @@ export async function mountClientsView(root) {
     { key: 'vencidos_30_plus', label: 'Vencidos ≥30d' },
     { key: 'bloqueados', label: 'Bloqueados' }
   ];
+
+  // criar botões e guardar referência
+  const filterButtons = [];
   filterDefs.forEach(f => {
     const b = document.createElement('button');
     b.className = 'filter-btn';
+    b.type = 'button';
     b.textContent = f.label;
     b.dataset.filter = f.key;
+    b.setAttribute('aria-pressed', f.key === 'todos' ? 'true' : 'false');
     if (f.key === 'todos') b.classList.add('active');
+    // listener individual (mesma lógica do toggle)
+    b.addEventListener('click', () => {
+      // desativar todas
+      filterButtons.forEach(btn => {
+        btn.classList.remove('active');
+        btn.setAttribute('aria-pressed', 'false');
+      });
+      // ativar esta
+      b.classList.add('active');
+      b.setAttribute('aria-pressed', 'true');
+      // atualizar estado e recarregar
+      currentFilter = f.key;
+      currentPage = 1;
+      loadAndRender();
+    });
+    filterButtons.push(b);
     filters.appendChild(b);
   });
 
@@ -242,19 +258,6 @@ export async function mountClientsView(root) {
     loadAndRender();
   });
 
-  filters.addEventListener('click', (e) => {
-    if (!(e.target instanceof HTMLElement)) return;
-    const f = e.target.dataset.filter;
-    if (!f) return;
-
-    filters.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-    e.target.classList.add('active');
-
-    currentFilter = f;
-    currentPage = 1;
-    loadAndRender();
-  });
-
   notifiedToggle.addEventListener('click', () => {
     currentNotNotified = !currentNotNotified;
     notifiedToggle.setAttribute('aria-checked', String(currentNotNotified));
@@ -298,7 +301,6 @@ export async function mountClientsView(root) {
   });
 
   async function openEdit(id) {
-    // busca rápida (carrega uma página grande para encontrar o item)
     const resp = await getClients({ page: 1, pageSize: 1000 });
     const item = resp.items.find(x => x.id === id);
     if (!item) return;
