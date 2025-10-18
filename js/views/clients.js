@@ -1,5 +1,5 @@
 // js/views/clients.js
-// View de Clientes com filtros corrigidos (uso de closest para delegação)
+// View de Clientes com filtros corrigidos (cada botão tem listener individual, mesma lógica do toggle)
 import {
   getClients,
   createClient,
@@ -75,13 +75,33 @@ export async function mountClientsView(root) {
     { key: 'vencidos_30_plus', label: 'Vencidos ≥30d' },
     { key: 'bloqueados', label: 'Bloqueados' }
   ];
+
+  // criar botões e guardar referência
+  const filterButtons = [];
   filterDefs.forEach(f => {
     const b = document.createElement('button');
     b.className = 'filter-btn';
     b.type = 'button';
     b.textContent = f.label;
     b.dataset.filter = f.key;
+    b.setAttribute('aria-pressed', f.key === 'todos' ? 'true' : 'false');
     if (f.key === 'todos') b.classList.add('active');
+    // listener individual (mesma lógica do toggle)
+    b.addEventListener('click', () => {
+      // desativar todas
+      filterButtons.forEach(btn => {
+        btn.classList.remove('active');
+        btn.setAttribute('aria-pressed', 'false');
+      });
+      // ativar esta
+      b.classList.add('active');
+      b.setAttribute('aria-pressed', 'true');
+      // atualizar estado e recarregar
+      currentFilter = f.key;
+      currentPage = 1;
+      loadAndRender();
+    });
+    filterButtons.push(b);
     filters.appendChild(b);
   });
 
@@ -234,19 +254,6 @@ export async function mountClientsView(root) {
 
   pageSizeSelect.addEventListener('change', () => {
     currentPageSize = Number(pageSizeSelect.value) || 12;
-    currentPage = 1;
-    loadAndRender();
-  });
-
-  // Correção: use closest para garantir que cliques em texto/children resolvam o botão correto
-  filters.addEventListener('click', (e) => {
-    const btn = e.target.closest && e.target.closest('.filter-btn');
-    if (!btn || !filters.contains(btn)) return; // ignora cliques fora dos botões
-    const f = btn.dataset.filter;
-    if (!f) return;
-    filters.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentFilter = f;
     currentPage = 1;
     loadAndRender();
   });
