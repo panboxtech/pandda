@@ -8,10 +8,8 @@
 // através do ctx._registerCleanup(fn). Isso evita intervals/observers persistindo
 // após fechamento do modal.
 //
-// Comentários para Supabase/integracao:
-// - Esta é apenas a camada de UI. Ao migrar para chamadas assíncronas que podem
-//   demorar (ex: supabase rpc/insert), prefira usar onConfirm/await dentro do
-//   openFormModal caller para exibir estado de "salvando" e impedir fechamento.
+// Melhorias: adiciona atributos ARIA, garante remoção do nodo do DOM no fechamento,
+// e não deixa elementos invisíveis bloqueando interação.
 
 export function openFormModal(options = {}) {
   const { title = '', renderForm, onConfirm } = options;
@@ -19,7 +17,9 @@ export function openFormModal(options = {}) {
   return new Promise((resolve, reject) => {
     // criar estrutura do modal
     const modalRoot = document.createElement('div');
-    modalRoot.className = 'modal-root active';
+    modalRoot.className = 'modal-root'; // sem active inicialmente
+    modalRoot.setAttribute('role', 'dialog');
+    modalRoot.setAttribute('aria-modal', 'true');
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -45,6 +45,7 @@ export function openFormModal(options = {}) {
     closeBtn.className = 'icon-btn';
     closeBtn.innerHTML = '✕';
     closeBtn.title = 'Fechar';
+    closeBtn.setAttribute('aria-label', 'Fechar modal');
     header.appendChild(closeBtn);
 
     modal.appendChild(header);
@@ -61,8 +62,16 @@ export function openFormModal(options = {}) {
     footer.style.justifyContent = 'flex-end';
     modal.appendChild(footer);
 
-    // append to body
+    // append to body (invisível até ativar)
     document.body.appendChild(modalRoot);
+
+    // ativar modal (aplica classe active que exibe e habilita pointer-events)
+    // usa setTimeout para garantir pintura antes de setar focus
+    requestAnimationFrame(() => {
+      modalRoot.classList.add('active');
+      // move focus to modal for accessibility
+      try { modal.focus(); } catch (e) {}
+    });
 
     // housekeeping for cleanup
     const cleanupFns = new Set();
@@ -80,19 +89,15 @@ export function openFormModal(options = {}) {
     // context passed to renderForm so form can resolve/cancel and register cleanup tasks
     const ctx = {
       resolve: (data) => {
-        // delegate to onConfirm if provided and it's async; wait it before closing
         const maybe = (async () => {
           try {
             if (typeof onConfirm === 'function') {
-              // allow onConfirm to throw to block closure
               await onConfirm(data);
             }
             closeModal();
             resolve(data);
           } catch (err) {
-            // keep modal open and surface error to form if wanted (form should handle displays)
-            // also reject promise to callers that awaited openFormModal().catch()
-            // but we choose to reject to surface error to caller
+            // do not close modal; surface error to caller
             reject(err);
           }
         })();
@@ -102,7 +107,6 @@ export function openFormModal(options = {}) {
         closeModal();
         reject(reason || new Error('cancelled'));
       },
-      // internal helper for forms to register observers/intervals for cleanup on close
       _registerCleanup: registerCleanup
     };
 
@@ -110,8 +114,20 @@ export function openFormModal(options = {}) {
     function closeModal() {
       // run cleanup first (observers, intervals, etc)
       try { runCleanup(); } catch (err) {}
-      // remove DOM
-      if (modalRoot && modalRoot.parentNode) modalRoot.parentNode.removeChild(modalRoot);
+      // remove DOM node if still attached
+      try {
+        if (modalRoot && modalRoot.parentNode) {
+          // visual hide before removal to avoid flicker
+          modalRoot.classList.remove('active');
+          // allow CSS transition to finish if any, then remove
+          // use setTimeout 150ms which is small; safe fallback to immediate removal if needed
+          setTimeout(() => {
+            if (modalRoot && modalRoot.parentNode) modalRoot.parentNode.removeChild(modalRoot);
+          }, 150);
+        }
+      } catch (err) {
+        try { if (modalRoot && modalRoot.parentNode) modalRoot.parentNode.removeChild(modalRoot); } catch (_) {}
+      }
     }
 
     // wire close button and overlay click to cancel
@@ -123,10 +139,16 @@ export function openFormModal(options = {}) {
       overlay.removeEventListener('click', onCloseClick);
     });
 
+    // trap keyboard ESC to close
+    function onKeyDown(e) {
+      if (e.key === 'Escape') ctx.cancel();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    registerCleanup(() => document.removeEventListener('keydown', onKeyDown));
+
     // render form
     try {
       if (typeof renderForm === 'function') {
-        // Passamos ctx para que o form possa chamar ctx.resolve / ctx.cancel
         renderForm(content, ctx);
       } else {
         content.appendChild(document.createTextNode('Nenhum renderForm fornecido'));
@@ -134,7 +156,7 @@ export function openFormModal(options = {}) {
     } catch (err) {
       // Erro ao renderizar o form: cleanup e rejeitar
       runCleanup();
-      if (modalRoot && modalRoot.parentNode) modalRoot.parentNode.removeChild(modalRoot);
+      try { if (modalRoot && modalRoot.parentNode) modalRoot.parentNode.removeChild(modalRoot); } catch {}
       reject(err);
     }
   });
