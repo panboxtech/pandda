@@ -1,126 +1,84 @@
 // js/views/servers.js
+// Servidor: nome, alias
 import { getServers, createServer, updateServer, deleteServer } from '../mockData.js';
 import { openFormModal } from '../modal.js';
-import { getSession } from '../auth.js';
+
+function el(tag, text, className) { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (className) e.className = className; return e; }
 
 export async function mountServersView(root) {
-  const role = (getSession() || {}).role || 'comum';
+  const container = document.createElement('section'); container.className='view view-servers';
+  const header = document.createElement('div'); header.className='view-header'; header.appendChild(Object.assign(document.createElement('h2'),{textContent:'Servidores'}));
+  const actions = document.createElement('div'); actions.className='view-actions';
+  const btnAdd = document.createElement('button'); btnAdd.className='btn'; btnAdd.textContent='Novo servidor'; actions.appendChild(btnAdd);
+  header.appendChild(actions); container.appendChild(header);
 
-  const container = document.createElement('section');
-  container.className = 'view view-servers';
-  const header = document.createElement('div'); header.className='view-header';
-  header.appendChild(Object.assign(document.createElement('h2'),{textContent:'Servidores'}));
-
-  const actions = document.createElement('div');
-  const btnAdd = document.createElement('button'); btnAdd.className='btn'; btnAdd.textContent='Novo servidor';
-  actions.appendChild(btnAdd);
-  header.appendChild(actions);
-  container.appendChild(header);
-
-  const list = document.createElement('div'); list.className='list';
-  container.appendChild(list);
-  const feedback = document.createElement('div'); feedback.className='feedback';
-  container.appendChild(feedback);
+  const list = document.createElement('div'); list.className='list'; const feedback = document.createElement('div'); feedback.className='feedback';
+  container.appendChild(list); container.appendChild(feedback);
 
   async function load() {
     feedback.textContent = 'Carregando...';
     try {
-      const items = await getServers();
+      const servers = await getServers();
       list.innerHTML = '';
-      items.forEach(s=>{
+      servers.forEach(s=>{
         const row = document.createElement('div'); row.className='list-row';
-        const left = document.createElement('div');
-        left.appendChild(Object.assign(document.createElement('div'),{textContent:s.name,className:'list-title'}));
-        left.appendChild(Object.assign(document.createElement('div'),{textContent:s.url,className:'muted'}));
-        row.appendChild(left);
+        row.appendChild(Object.assign(document.createElement('div'),{textContent: s.nome + (s.alias ? ` — ${s.alias}` : ''), className:'list-title'}));
         const right = document.createElement('div');
         const edit = document.createElement('button'); edit.className='btn small'; edit.textContent='Editar';
-
-        // regra de permissões: comum NÃO pode editar servidores
-        if (role === 'master') {
-          edit.addEventListener('click',()=> openEdit(s.id));
-          right.appendChild(edit);
-
-          const del = document.createElement('button'); del.className='btn small ghost'; del.textContent='Excluir';
-          del.addEventListener('click',()=> confirmDelete(s.id));
-          right.appendChild(del);
-        } else {
-          // comum: apenas adiciona novo servidor (botão "Editar" não exibido)
-          // mostrar apenas um indicador se quiser (opcional)
-          const dash = document.createElement('span'); dash.className='muted'; dash.textContent='';
-          right.appendChild(dash);
-        }
-
+        edit.addEventListener('click', ()=> openEdit(s.id));
+        right.appendChild(edit);
+        const del = document.createElement('button'); del.className='btn small ghost'; del.textContent='Excluir';
+        del.addEventListener('click', async ()=> { if(confirm('Excluir servidor?')) { await deleteServer(s.id); await load(); }});
+        right.appendChild(del);
         row.appendChild(right);
         list.appendChild(row);
       });
-      feedback.textContent = `${items.length} servidores`;
+      feedback.textContent = `${servers.length} servidores`;
     } catch (err) {
-      feedback.textContent = 'Erro: '+err.message;
+      feedback.textContent = 'Erro: ' + err.message;
     }
   }
 
-  btnAdd.addEventListener('click', ()=>{
-    // ambos os roles podem adicionar novo servidor (conforme regra)
+  btnAdd.addEventListener('click', ()=> {
     openFormModal({
       title: 'Novo servidor',
       renderForm: (container, ctx) => {
-        const nameLabel = document.createElement('label'); nameLabel.textContent='Nome';
-        const nameInput = document.createElement('input'); nameInput.type='text';
-        const urlLabel = document.createElement('label'); urlLabel.textContent='URL';
-        const urlInput = document.createElement('input'); urlInput.type='url';
-        const saveBtn = document.createElement('button'); saveBtn.className='btn'; saveBtn.textContent='Salvar';
-        saveBtn.addEventListener('click', ()=> ctx.resolve({ name: nameInput.value, url: urlInput.value }));
-        const cancelBtn = document.createElement('button'); cancelBtn.className='btn ghost'; cancelBtn.textContent='Cancelar';
-        cancelBtn.addEventListener('click', ()=> ctx.cancel());
-
+        const nameLabel = el('label','Nome'); const nameInput = document.createElement('input'); nameInput.type='text';
+        const aliasLabel = el('label','Alias'); const aliasInput = document.createElement('input'); aliasInput.type='text';
         container.appendChild(nameLabel); container.appendChild(nameInput);
-        container.appendChild(urlLabel); container.appendChild(urlInput);
-        container.appendChild(saveBtn); container.appendChild(cancelBtn);
+        container.appendChild(aliasLabel); container.appendChild(aliasInput);
+        const save = document.createElement('button'); save.className='btn'; save.type='button'; save.textContent='Salvar';
+        save.addEventListener('click', ()=> {
+          if (!nameInput.value.trim()) return alert('Nome obrigatório');
+          ctx.resolve({ nome: nameInput.value.trim(), alias: aliasInput.value.trim() });
+        });
+        const cancel = document.createElement('button'); cancel.className='btn ghost'; cancel.type='button'; cancel.textContent='Cancelar'; cancel.addEventListener('click', ()=> ctx.cancel());
+        container.appendChild(save); container.appendChild(cancel);
       },
       onConfirm: async (data) => { await createServer(data); await load(); }
     }).catch(()=>{});
   });
 
   async function openEdit(id) {
-    // apenas master alcança aqui (ver load logic)
-    const items = await getServers();
-    const s = items.find(x=>x.id===id);
+    const servers = await getServers();
+    const s = servers.find(x=>x.id===id);
     if (!s) return;
     openFormModal({
       title: 'Editar servidor',
       renderForm: (container, ctx) => {
-        const nameLabel = document.createElement('label'); nameLabel.textContent='Nome';
-        const nameInput = document.createElement('input'); nameInput.type='text'; nameInput.value = s.name;
-        const urlLabel = document.createElement('label'); urlLabel.textContent='URL';
-        const urlInput = document.createElement('input'); urlInput.type='url'; urlInput.value = s.url;
-        const saveBtn = document.createElement('button'); saveBtn.className='btn'; saveBtn.textContent='Salvar';
-        saveBtn.addEventListener('click', ()=> ctx.resolve({ name: nameInput.value, url: urlInput.value }));
-        const cancelBtn = document.createElement('button'); cancelBtn.className='btn ghost'; cancelBtn.textContent='Cancelar';
-        cancelBtn.addEventListener('click', ()=> ctx.cancel());
+        const nameLabel = el('label','Nome'); const nameInput = document.createElement('input'); nameInput.type='text'; nameInput.value = s.nome;
+        const aliasLabel = el('label','Alias'); const aliasInput = document.createElement('input'); aliasInput.type='text'; aliasInput.value = s.alias || '';
         container.appendChild(nameLabel); container.appendChild(nameInput);
-        container.appendChild(urlLabel); container.appendChild(urlInput);
-        container.appendChild(saveBtn); container.appendChild(cancelBtn);
+        container.appendChild(aliasLabel); container.appendChild(aliasInput);
+        const save = document.createElement('button'); save.className='btn'; save.type='button'; save.textContent='Salvar';
+        save.addEventListener('click', ()=> {
+          if (!nameInput.value.trim()) return alert('Nome obrigatório');
+          ctx.resolve({ nome: nameInput.value.trim(), alias: aliasInput.value.trim() });
+        });
+        const cancel = document.createElement('button'); cancel.className='btn ghost'; cancel.type='button'; cancel.textContent='Cancelar'; cancel.addEventListener('click', ()=> ctx.cancel());
+        container.appendChild(save); container.appendChild(cancel);
       },
       onConfirm: async (data) => { await updateServer(id, data); await load(); }
-    }).catch(()=>{});
-  }
-
-  async function confirmDelete(id) {
-    openFormModal({
-      title: 'Confirmar exclusão',
-      renderForm: (container, ctx) => {
-        container.appendChild(Object.assign(document.createElement('div'),{textContent:'Remover servidor?' }));
-        const ok = document.createElement('button'); ok.className='btn'; ok.textContent='Excluir';
-        ok.addEventListener('click', async ()=> {
-          await deleteServer(id);
-          ctx.resolve(true);
-        });
-        const cancel = document.createElement('button'); cancel.className='btn ghost'; cancel.textContent='Cancelar';
-        cancel.addEventListener('click', ()=> ctx.cancel());
-        container.appendChild(ok); container.appendChild(cancel);
-      },
-      onConfirm: () => load()
     }).catch(()=>{});
   }
 
