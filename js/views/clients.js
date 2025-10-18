@@ -1,9 +1,15 @@
 // js/views/clients.js
-// Atualizado para incluir seleção de plano, servidores (até 2), override de telas/preco, cálculo de validade,
-// e gerenciamento dinâmico de pontosDeAcesso com regras sobre multiplosAcessos.
-// Observação: cálculo de validade usa date local no mock. Ao integrar Supabase, use a data retornada pelo backend.
+// Formulário de cliente refinado para regra: telas == soma de conexões por servidor (cada servidor precisa alcançar telas).
+// Mensagens inline (não usamos alert) e comentários para integração Supabase.
 
-import { getClients, getPlans, getServers, getApps, createClient, updateClient, getClients as getAllClients } from '../mockData.js';
+import {
+  getClients,
+  getPlans,
+  getServers,
+  getApps,
+  createClient,
+  updateClient
+} from '../mockData.js';
 import { openFormModal } from '../modal.js';
 import { getSession } from '../auth.js';
 
@@ -18,41 +24,59 @@ function formatDateIso(d) {
   return `${y}-${m}-${day}`;
 }
 
-function addMonthsFromDate(date, months) {
-  // keep day; if invalid, caller must handle fallback to 01 next month
+function addMonthsFromDateUTC(date, months) {
   const d = new Date(date.getTime());
-  const targetMonth = d.getMonth() + months;
-  return new Date(d.getFullYear(), targetMonth, d.getDate());
+  const targetMonth = d.getUTCMonth() + months;
+  return new Date(Date.UTC(d.getUTCFullYear(), targetMonth, d.getUTCDate()));
+}
+
+// Validador reutilizável: verifica soma por servidor == telas
+export function validateConnectionsPerServer({ servidores = [], pontosDeAcesso = [], telas = 0 }) {
+  const map = {};
+  servidores.forEach(s => map[s] = 0);
+  pontosDeAcesso.forEach(p => {
+    if (!p.servidorId) return;
+    map[p.servidorId] = (map[p.servidorId] || 0) + Number(p.conexoesSimultaneas || 0);
+  });
+  const details = [];
+  for (const srv of servidores) {
+    const sum = map[srv] || 0;
+    details.push({ servidorId: srv, sum, expected: Number(telas) });
+  }
+  const ok = details.every(d => d.sum === d.expected);
+  return { ok, details };
 }
 
 export async function mountClientsView(root, { session } = {}) {
-  const container = document.createElement('section'); container.className='view view-clients';
-  const header = document.createElement('div'); header.className='view-header';
-  header.appendChild(el('h2','Clientes'));
-  const actions = document.createElement('div'); actions.className='view-actions';
-  const btnAdd = document.createElement('button'); btnAdd.className='btn'; btnAdd.textContent='Novo cliente';
-  actions.appendChild(btnAdd); header.appendChild(actions); container.appendChild(header);
+  const container = document.createElement('section');
+  container.className = 'view view-clients';
 
-  // keep toolbar/filter/pagination as before — omitted here for brevity reusing existing UI of your project
-  // We'll focus on the extended create/edit form which is the main change per request.
+  const header = document.createElement('div'); header.className = 'view-header';
+  header.appendChild(el('h2', 'Clientes'));
+  const actions = document.createElement('div'); actions.className = 'view-actions';
+  const btnAdd = document.createElement('button'); btnAdd.className = 'btn'; btnAdd.textContent = 'Novo cliente';
+  actions.appendChild(btnAdd);
+  header.appendChild(actions);
+  container.appendChild(header);
 
-  const list = document.createElement('div'); list.className='list';
+  // list area
+  const list = document.createElement('div'); list.className = 'list';
   const feedback = el('div','', 'feedback');
   container.appendChild(list); container.appendChild(feedback);
 
   async function load() {
     feedback.textContent = 'Carregando...';
-    const resp = await getClients({ page:1, pageSize:1000 }); // for brevity show up to 1000
+    const resp = await getClients({ page:1, pageSize:1000 });
     list.innerHTML = '';
     resp.items.forEach(c => {
-      const row = document.createElement('div'); row.className='list-row';
+      const row = document.createElement('div'); row.className = 'list-row';
       const left = document.createElement('div');
-      left.appendChild(el('div', `${c.nome} ${c.blocked ? '(Bloqueado)':''}`, 'list-title'));
-      left.appendChild(el('div', `Plano: ${c.planoId || '—'} • Telas: ${c.telas} • Validade: ${c.validade || '—'}`, 'muted'));
+      left.appendChild(el('div', `${c.nome} ${c.blocked ? '(Bloqueado)' : ''}`, 'list-title'));
+      left.appendChild(el('div', `Plano: ${c.planoId || '—'} • Telas: ${c.telas} • Servidores: ${ (c.servidores||[]).join(', ') }`, 'muted'));
       row.appendChild(left);
       const right = document.createElement('div');
-      const edit = document.createElement('button'); edit.className='btn small'; edit.textContent='Editar';
-      edit.addEventListener('click', ()=> openEdit(c.id));
+      const edit = document.createElement('button'); edit.className = 'btn small'; edit.textContent = 'Editar';
+      edit.addEventListener('click', () => openEdit(c.id));
       right.appendChild(edit);
       row.appendChild(right);
       list.appendChild(row);
@@ -60,14 +84,17 @@ export async function mountClientsView(root, { session } = {}) {
     feedback.textContent = `${resp.total} clientes`;
   }
 
-  btnAdd.addEventListener('click', ()=> {
+  btnAdd.addEventListener('click', () => {
     openFormModal({
       title: 'Novo cliente',
       renderForm: (container, ctx) => renderClientForm(container, ctx, null),
       onConfirm: async (data) => {
-        // validation before create: ensure pontosDeAcesso constraints
-        const validationErr = validateClientPayload(data);
-        if (validationErr) throw new Error(validationErr);
+        // validação pré-persistência
+        const v = validateConnectionsPerServer({ servidores: data.servidores, pontosDeAcesso: data.pontosDeAcesso, telas: data.telas });
+        if (!v.ok) {
+          const bad = v.details.filter(d => d.sum !== d.expected).map(d => `${d.servidorId}: ${d.sum}/${d.expected}`).join('; ');
+          throw new Error('Validação falhou por servidor: ' + bad);
+        }
         await createClient(data);
         await load();
       }
@@ -82,85 +109,50 @@ export async function mountClientsView(root, { session } = {}) {
       title: 'Editar cliente',
       renderForm: (container, ctx) => renderClientForm(container, ctx, item),
       onConfirm: async (data) => {
-        const validationErr = validateClientPayload(data);
-        if (validationErr) throw new Error(validationErr);
+        const v = validateConnectionsPerServer({ servidores: data.servidores, pontosDeAcesso: data.pontosDeAcesso, telas: data.telas });
+        if (!v.ok) {
+          const bad = v.details.filter(d => d.sum !== d.expected).map(d => `${d.servidorId}: ${d.sum}/${d.expected}`).join('; ');
+          throw new Error('Validação falhou por servidor: ' + bad);
+        }
         await updateClient(id, data);
         await load();
       }
     }).catch(()=>{});
   }
 
-  function validateClientPayload(payload) {
-    // 1) servidores <= 2
-    if (payload.servidores && payload.servidores.length > 2) return 'Um cliente pode ter no máximo 2 servidores';
-    // 2) pontosDeAcesso: soma conexoes por servidor deve ser igual ao telas definidas para aquele servidor
-    const pontos = payload.pontosDeAcesso || [];
-    // build map servidorId -> soma conexoes
-    const sumBySrv = {};
-    pontos.forEach(p => {
-      sumBySrv[p.servidorId] = (sumBySrv[p.servidorId] || 0) + Number(p.conexoesSimultaneas || 0);
-    });
-    // each server assigned to client must have sumBySrv == telas for that server
-    // rule: "soma de conexõesMultiplas de todos os acessos adicionados só pode ser validado quando for igual ao numero de telas."
-    // Interpretation: for each servidor in payload.servidores, the sum of conexoesSimultaneas for pontos using that servidor must equal allowed telas for that servidor.
-    // Since telas is per cliente but not shared between servers, assume telas value is per server (user may input per server in UI); our model stores telas on client as total per server instance in the same field per server. For simplicity, require total sum across pontos for all servidores equals telas * number of servidores assigned? The user requested "numero de telas não é compartilhado", so telas applies per server. Therefore for N servers, each server should have its own tela count. For current data model we used single telas on client; therefore we require that when multiple servers present, pontos specify conexoes up to telas for each server. So we expect payload to include telasPorServidor map or clientes.servidores array with objects. To keep backward compatibility, we will require payload to include telasPorServidor mapping when more than one server provided. Validate accordingly.
-    if (payload.servidores && payload.servidores.length > 1) {
-      // expect payload.telasPorServidor: { servidorId: number, ... }
-      if (!payload.telasPorServidor) return 'Para múltiplos servidores informe telas por servidor';
-      for (const srvId of payload.servidores) {
-        const allowed = Number(payload.telasPorServidor[srvId]||0);
-        const sum = Number(sumBySrv[srvId]||0);
-        if (sum !== allowed) return `Soma de conexões do servidor ${srvId} (${sum}) deve ser igual ao número de telas (${allowed})`;
-      }
-    } else {
-      // single server case: use payload.telas as allowed
-      const srvId = (payload.servidores && payload.servidores[0]) || null;
-      if (srvId) {
-        const allowed = Number(payload.telas || 0);
-        const sum = Number(sumBySrv[srvId]||0);
-        if (sum !== allowed) return `Soma de conexões (${sum}) deve ser igual ao número de telas (${allowed}) para o servidor ${srvId}`;
-      }
-    }
-    // 3) pontosDeAcesso: if app.multiplosAcessos === false, conexoesSimultaneas must be 1
-    // Note: this validation will be performed in UI as well; here do a soft check
-    return null;
-  }
-
+  // Render do formulário de cliente
   function renderClientForm(container, ctx, values = null) {
-    // values null => create flow: user picks plan/servers and we compute defaults
     container.innerHTML = '';
-    const form = document.createElement('div'); form.className='entity-form';
+    const form = document.createElement('div'); form.className = 'entity-form';
 
-    const nomeLabel = el('label','Nome'); const nomeInput = document.createElement('input'); nomeInput.type='text'; nomeInput.value = values ? values.nome || '' : '';
-    form.appendChild(nomeLabel); form.appendChild(nomeInput);
+    // area de mensagens inline
+    const messageBox = document.createElement('div'); messageBox.className = 'form-message'; messageBox.style.marginBottom = '8px';
+    form.appendChild(messageBox);
 
-    const phoneLabel = el('label','Telefone'); const phoneInput = document.createElement('input'); phoneInput.type='text'; phoneInput.value = values ? values.phone || '' : '';
-    form.appendChild(phoneLabel); form.appendChild(phoneInput);
+    // Campos básicos
+    form.appendChild(el('label','Nome')); const nomeInput = document.createElement('input'); nomeInput.type='text'; nomeInput.value = values ? values.nome || '' : ''; form.appendChild(nomeInput);
+    form.appendChild(el('label','Telefone')); const phoneInput = document.createElement('input'); phoneInput.type='text'; phoneInput.value = values ? values.phone || '' : ''; form.appendChild(phoneInput);
+    form.appendChild(el('label','Email')); const emailInput = document.createElement('input'); emailInput.type='email'; emailInput.value = values ? values.email || '' : ''; form.appendChild(emailInput);
 
-    const emailLabel = el('label','Email'); const emailInput = document.createElement('input'); emailInput.type='email'; emailInput.value = values ? values.email || '' : '';
-    form.appendChild(emailLabel); form.appendChild(emailInput);
-
-    // servers selection (multiple up to 2) - use checkbox list for simplicity
-    const serversLabel = el('label','Servidores (máx 2)');
-    form.appendChild(serversLabel);
-    const serversList = document.createElement('div'); serversList.className='servers-list';
+    // Seleção de servidores (até 2) - checkboxes
+    form.appendChild(el('label','Servidores (máx 2)'));
+    const serversList = document.createElement('div'); serversList.className = 'servers-list';
     getServers().then(srvs => {
       srvs.forEach(srv => {
-        const id = srv.id;
-        const wrap = document.createElement('label'); wrap.style.display='inline-flex'; wrap.style.alignItems='center'; wrap.style.gap='6px'; wrap.style.marginRight='12px';
-        const ch = document.createElement('input'); ch.type='checkbox'; ch.value = id;
-        if (values && Array.isArray(values.servidores) && values.servidores.includes(id)) ch.checked = true;
-        wrap.appendChild(ch); wrap.appendChild(document.createTextNode(srv.nome));
+        const wrap = document.createElement('label');
+        wrap.style.display = 'inline-flex'; wrap.style.alignItems='center'; wrap.style.gap='6px'; wrap.style.marginRight='12px';
+        const ch = document.createElement('input'); ch.type='checkbox'; ch.value = srv.id;
+        if (values && Array.isArray(values.servidores) && values.servidores.includes(srv.id)) ch.checked = true;
+        wrap.appendChild(ch);
+        wrap.appendChild(document.createTextNode(srv.nome));
         serversList.appendChild(wrap);
       });
     });
     form.appendChild(serversList);
 
-    // plan select dropdown
-    const planLabel = el('label','Plano');
-    form.appendChild(planLabel);
-    const planSelect = document.createElement('select');
-    planSelect.appendChild(Object.assign(document.createElement('option'),{value:'',textContent:'Selecione plano'}));
+    // Plano select
+    form.appendChild(el('label','Plano'));
+    const planSelect = document.createElement('select'); planSelect.appendChild(Object.assign(document.createElement('option'),{ value:'', textContent:'Selecione plano' }));
     getPlans().then(pls => {
       pls.forEach(p => {
         const o = document.createElement('option'); o.value = p.id; o.textContent = `${p.nome} — ${p.telas} telas — R$${p.preco}`;
@@ -170,108 +162,163 @@ export async function mountClientsView(root, { session } = {}) {
     });
     form.appendChild(planSelect);
 
-    // telas (default from plan, editable) + preco (default from plan editable) + validade (computed)
-    form.appendChild(el('label','Telas'));
-    const telasInput = document.createElement('input'); telasInput.type='number'; telasInput.min='1'; telasInput.value = values ? (values.telas || 0) : 0;
+    // Telas (número POR servidor), Preço (padrão do plano, editável) e Validade (calculada)
+    form.appendChild(el('label','Telas (por servidor)'));
+    const telasInput = document.createElement('input'); telasInput.type='number'; telasInput.min='1'; telasInput.value = values ? (values.telas || 0) : 1;
     form.appendChild(telasInput);
 
     form.appendChild(el('label','Preço (R$)'));
     const precoInput = document.createElement('input'); precoInput.type='number'; precoInput.step='0.01'; precoInput.value = values ? (values.preco || 0) : 0;
     form.appendChild(precoInput);
 
-    // validade date (computed but editable)
     form.appendChild(el('label','Validade'));
     const validadeInput = document.createElement('input'); validadeInput.type='date'; validadeInput.value = values ? (values.validade || '') : '';
     form.appendChild(validadeInput);
 
-    // telasPorServidor field for multi-server scenarios (object serialized in UI as per-server number)
-    const telasPorSrvContainer = document.createElement('div'); telasPorSrvContainer.className='telas-por-srv';
-    form.appendChild(telasPorSrvContainer);
+    // Indicadores por servidor (mostram soma atual / telas)
+    const serversIndicators = document.createElement('div'); serversIndicators.className = 'servers-indicators'; serversIndicators.style.margin = '8px 0';
+    form.appendChild(serversIndicators);
 
-    // Pontos de Acesso dynamic list
+    // Pontos de Acesso (dinâmico)
     form.appendChild(el('label','Pontos de Acesso'));
-    const pontosContainer = document.createElement('div'); pontosContainer.className='pontos-container';
+    const pontosContainer = document.createElement('div'); pontosContainer.className = 'pontos-container';
     form.appendChild(pontosContainer);
-    const addPontoBtn = document.createElement('button'); addPontoBtn.className='btn small'; addPontoBtn.type='button'; addPontoBtn.textContent='Adicionar Ponto';
+    const addPontoBtn = document.createElement('button'); addPontoBtn.className = 'btn small'; addPontoBtn.type='button'; addPontoBtn.textContent = 'Adicionar Ponto';
     form.appendChild(addPontoBtn);
 
-    // helper to refresh telasPorServidor inputs based on selected servers
-    function renderTelasPorServidorInputs(selectedServers) {
-      telasPorSrvContainer.innerHTML = '';
-      if (!selectedServers || selectedServers.length <= 1) return;
-      selectedServers.forEach(srvId => {
-        const row = document.createElement('div'); row.style.display='flex'; row.style.gap='8px'; row.style.alignItems='center'; row.style.marginBottom='6px';
-        const lbl = el('label', `Telas para ${srvId}`); lbl.style.minWidth='150px';
-        const inp = document.createElement('input'); inp.type='number'; inp.min='0'; inp.value = (values && values.telasPorServidor && values.telasPorServidor[srvId]) ? values.telasPorServidor[srvId] : 0;
-        inp.dataset.srv = srvId;
-        row.appendChild(lbl); row.appendChild(inp);
-        telasPorSrvContainer.appendChild(row);
-      });
+    // populate existing pontos if editing
+    (async () => {
+      if (values && Array.isArray(values.pontosDeAcesso)) {
+        await renderPontos(values.pontosDeAcesso.slice());
+      } else {
+        await renderPontos([]);
+      }
+      updateIndicatorsAndValidation();
+    })();
+
+    // when plan selected, fill telas/preco/validade defaults
+    planSelect.addEventListener('change', async () => {
+      if (!planSelect.value) return;
+      const plans = await getPlans();
+      const sel = plans.find(p => p.id === planSelect.value);
+      if (!sel) return;
+      telasInput.value = sel.telas;
+      precoInput.value = sel.preco;
+      const now = new Date();
+      const calc = addMonthsFromDateUTC(now, sel.validadeEmMeses);
+      // fallback: if day mismatch, set to 01 of next month
+      if (calc.getUTCDate() !== now.getUTCDate()) {
+        const fallback = new Date(Date.UTC(calc.getUTCFullYear(), calc.getUTCMonth() + 1, 1));
+        validadeInput.value = formatDateIso(fallback);
+        messageBox.innerHTML = `<div class="warn">Validade ajustada para ${formatDateIso(fallback)} (ajuste de dia inválido no mês alvo).</div>`;
+      } else {
+        validadeInput.value = formatDateIso(calc);
+        messageBox.innerHTML = '';
+      }
+      updateIndicatorsAndValidation();
+    });
+
+    // when servers selection changes, ensure max 2 and update indicators
+    serversList.addEventListener('change', () => {
+      const selected = getSelectedServers();
+      if (selected.length > 2) {
+        // desfaz última mudança (simples: desmarcar a última marcada)
+        // para simplicidade, apenas alertamos aqui e desmarcamos todos extras
+        messageBox.innerHTML = `<div class="error">Selecione no máximo 2 servidores</div>`;
+        Array.from(serversList.querySelectorAll('input[type=checkbox]')).forEach(inp => {
+          if (!selected.includes(inp.value)) inp.checked = false;
+        });
+      } else {
+        messageBox.innerHTML = '';
+      }
+      updateIndicatorsAndValidation();
+    });
+
+    // when telas change, update constraints for pontos
+    telasInput.addEventListener('input', () => {
+      updateIndicatorsAndValidation();
+    });
+
+    addPontoBtn.addEventListener('click', async () => {
+      const cur = readPontosFromUI();
+      cur.push({ appId: '', servidorId: '', usuario: '', senha: '', conexoesSimultaneas: 1 });
+      await renderPontos(cur);
+      updateIndicatorsAndValidation();
+    });
+
+    // --- functions used above ---
+
+    function getSelectedServers() {
+      return Array.from(serversList.querySelectorAll('input[type=checkbox]:checked')).map(i => i.value);
     }
 
-    // helper to render pontos list from values or dynamic additions
     async function renderPontos(pontos = []) {
       const allApps = await getApps();
       pontosContainer.innerHTML = '';
       pontos.forEach((p, idx) => {
-        const card = document.createElement('div'); card.style.border='1px solid rgba(0,0,0,0.06)'; card.style.padding='8px'; card.style.borderRadius='6px'; card.style.marginBottom='8px';
+        const card = document.createElement('div'); card.className = 'ponto-card'; card.style.padding='8px'; card.style.border='1px solid rgba(0,0,0,0.06)'; card.style.marginBottom='8px'; card.style.borderRadius='6px';
         // app select
         const appLabel = el('label','App'); const appSelect = document.createElement('select');
-        const emptyOpt = Object.assign(document.createElement('option'),{value:'',textContent:'Selecione app'});
-        appSelect.appendChild(emptyOpt);
+        appSelect.appendChild(Object.assign(document.createElement('option'),{value:'',textContent:'Selecione app'}));
         allApps.forEach(a => {
-          const o = document.createElement('option'); o.value = a.id; o.textContent = `${a.nome} (${a.codigoDeAcesso}) — Servidor: ${a.servidorId}`;
+          const o = document.createElement('option'); o.value = a.id; o.textContent = `${a.nome} — ${a.codigoDeAcesso} — srv:${a.servidorId}`;
           if (p.appId === a.id) o.selected = true;
           appSelect.appendChild(o);
         });
         // usuario / senha
         const userLabel = el('label','Usuário'); const userInput = document.createElement('input'); userInput.type='text'; userInput.value = p.usuario || '';
         const passLabel = el('label','Senha'); const passInput = document.createElement('input'); passInput.type='text'; passInput.value = p.senha || '';
-        // conexoesSimultaneas (respecting multiplosAcessos)
+        // conexoes
         const conexLabel = el('label','Conexões Simultâneas'); const conexInput = document.createElement('input'); conexInput.type='number'; conexInput.min='1'; conexInput.value = p.conexoesSimultaneas || 1;
 
-        // when app selection changes, set servidorId and enforce conexoesSimultaneas rules
+        // servidorInfo display
+        const srvInfo = el('div', p.servidorId ? `Servidor: ${p.servidorId}` : '', 'muted');
+
+        // remove btn
+        const removeBtn = document.createElement('button'); removeBtn.className = 'btn ghost small'; removeBtn.type='button'; removeBtn.textContent = 'Remover';
+        removeBtn.addEventListener('click', async () => {
+          const cur = readPontosFromUI();
+          cur.splice(idx,1);
+          await renderPontos(cur);
+          updateIndicatorsAndValidation();
+        });
+
+        // when app changes, set servidorId derived and enforce multiplosAcessos rule
         appSelect.addEventListener('change', async () => {
-          const selectedApp = await (async () => allApps.find(a=>a.id===appSelect.value))();
-          if (selectedApp) {
-            // set servidorId visually (we will store it on submit)
-            serverInfo.textContent = `Servidor: ${selectedApp.servidorId}`;
-            if (!selectedApp.multiplosAcessos) {
+          const selApp = allApps.find(a => a.id === appSelect.value);
+          if (selApp) {
+            srvInfo.textContent = `Servidor: ${selApp.servidorId}`;
+            // enforce single-access apps
+            if (!selApp.multiplosAcessos) {
               conexInput.value = 1;
               conexInput.disabled = true;
             } else {
               conexInput.disabled = false;
-              // set max as telas for that servidor (if provided)
-              const max = getAllowedTelasForServer(selectedApp.servidorId);
-              // constrain if needed
-              if (max > 0) {
-                conexInput.max = String(max);
-                if (Number(conexInput.value) > max) conexInput.value = max;
-              } else {
-                conexInput.removeAttribute('max');
-              }
+              // optionally set max, but final validation checks sums per servidor
+              conexInput.removeAttribute('max');
             }
           } else {
-            serverInfo.textContent = '';
+            srvInfo.textContent = '';
             conexInput.disabled = false;
           }
+          updateIndicatorsAndValidation();
         });
 
-        const serverInfo = el('div', `Servidor: ${p.servidorId || ''}`, 'muted');
-        const removeBtn = document.createElement('button'); removeBtn.className='btn ghost small'; removeBtn.type='button'; removeBtn.textContent='Remover';
-        removeBtn.addEventListener('click', () => {
-          pontos.splice(idx,1);
-          renderPontos(pontos);
-        });
-
-        // initial enforcement
+        // initial enforcement based on p.appId
         (async () => {
-          const sel = allApps.find(a => a.id === p.appId);
-          if (sel && !sel.multiplosAcessos) { conexInput.value = 1; conexInput.disabled = true; }
+          const appObj = allApps.find(a => a.id === p.appId);
+          if (appObj) {
+            srvInfo.textContent = `Servidor: ${appObj.servidorId}`;
+            if (!appObj.multiplosAcessos) {
+              conexInput.value = 1;
+              conexInput.disabled = true;
+            }
+          }
         })();
 
+        // assemble card
         card.appendChild(appLabel); card.appendChild(appSelect);
-        card.appendChild(serverInfo);
+        card.appendChild(srvInfo);
         card.appendChild(userLabel); card.appendChild(userInput);
         card.appendChild(passLabel); card.appendChild(passInput);
         card.appendChild(conexLabel); card.appendChild(conexInput);
@@ -280,168 +327,127 @@ export async function mountClientsView(root, { session } = {}) {
       });
     }
 
-    // helper to compute allowed telas for a given servidor in current form state
-    function getAllowedTelasForServer(servidorId) {
-      const selectedServers = Array.from(serversList.querySelectorAll('input[type=checkbox]:checked')).map(i => i.value);
-      if (selectedServers.length > 1) {
-        // find input in telasPorSrvContainer
-        const inp = telasPorSrvContainer.querySelector(`input[data-srv="${servidorId}"]`);
-        return inp ? Number(inp.value||0) : 0;
-      } else {
-        return Number(telasInput.value || 0);
-      }
-    }
-
-    // initialize form values based on values param or defaults from plan when creating
-    if (values) {
-      // populate pontos
-      renderPontos(Array.isArray(values.pontosDeAcesso) ? values.pontosDeAcesso.slice() : []);
-      // set telasPorServidor inputs if needed
-      renderTelasPorServidorInputs(values.servidores || []);
-    } else {
-      renderPontos([]);
-    }
-
-    // when plan changes, auto-fill telas/preco/validade according to plan
-    planSelect.addEventListener('change', async () => {
-      const planId = planSelect.value;
-      if (!planId) return;
-      const plans = await getPlans();
-      const sel = plans.find(p => p.id === planId);
-      if (!sel) return;
-      // set default telas/preco
-      const previousTelas = Number(telasInput.value || 0);
-      const previousPreco = Number(precoInput.value || 0);
-      telasInput.value = sel.telas;
-      precoInput.value = sel.preco;
-      // compute validade based on current date (mock uses local)
-      const now = new Date();
-      const calc = addMonthsFromDate(now, sel.validadeEmMeses);
-      // if day invalid (e.g., 31 Feb), detect and fallback to 01 next month
-      if (calc.getDate() !== now.getDate()) {
-        const fallback = new Date(calc.getFullYear(), calc.getMonth()+1, 1);
-        validadeInput.value = formatDateIso(fallback);
-        // show feedback notice
-        const msg = `Data de validade ajustada para ${formatDateIso(fallback)} por incompatibilidade de dia no mês alvo.`;
-        alert(msg);
-      } else {
-        validadeInput.value = formatDateIso(calc);
-      }
-      // if user later changes preco/telas manually, we'll show feedback on submit
-    });
-
-    // when servers selection changes, re-render telasPorServidor inputs and re-check pontos constraints
-    serversList.addEventListener('change', () => {
-      const selectedServers = Array.from(serversList.querySelectorAll('input[type=checkbox]:checked')).map(i=>i.value);
-      if (selectedServers.length > 2) {
-        alert('Selecione no máximo 2 servidores');
-        // undo last change
-        Array.from(serversList.querySelectorAll('input[type=checkbox]')).forEach(inp => {
-          if (selectedServers.indexOf(inp.value) === -1) inp.checked = false;
-        });
-        return;
-      }
-      renderTelasPorServidorInputs(selectedServers);
-    });
-
-    addPontoBtn.addEventListener('click', async () => {
-      // append a new point with empty values
-      const pontos = Array.from(pontosContainer.querySelectorAll('.pontos-container')) ? [] : [];
-      // we'll manage pontos in a lightweight manner: read current rendered points into an array, push empty object, re-render
-      const existing = readPontosFromUI();
-      existing.push({ appId: '', servidorId: '', usuario: '', senha: '', conexoesSimultaneas: 1 });
-      await renderPontos(existing);
-    });
-
-    // helper to read pontos from current UI (used before submit)
     function readPontosFromUI() {
       const cards = Array.from(pontosContainer.children);
       const dados = [];
       cards.forEach(card => {
         const sel = card.querySelector('select');
         const appId = sel ? sel.value : '';
-        const usuario = card.querySelector('input[type="text"]') ? card.querySelector('input[type="text"]').value : '';
-        const senhaInputs = card.querySelectorAll('input[type="text"]');
-        const senha = senhaInputs && senhaInputs[1] ? senhaInputs[1].value : '';
-        const conexInput = card.querySelector('input[type="number"]');
-        const conex = conexInput ? Number(conexInput.value || 0) : 0;
-        // derive servidorId from selected app
-        const appObj = null; // will be resolved in submit
-        dados.push({ appId, servidorId: '', usuario, senha, conexoesSimultaneas: conex });
+        const appObj = null;
+        const inputsText = card.querySelectorAll('input[type="text"]');
+        const usuario = inputsText && inputsText[0] ? inputsText[0].value : '';
+        const senha = inputsText && inputsText[1] ? inputsText[1].value : '';
+        const conex = card.querySelector('input[type="number"]') ? Number(card.querySelector('input[type="number"]').value || 0) : 0;
+        // derive servidorId by app selection from app list
+        dados.push({ appId, servidorId: null, usuario, senha, conexoesSimultaneas: conex });
       });
       return dados;
     }
 
-    // on save: assemble payload, resolve
-    const saveBtn = document.createElement('button'); saveBtn.className='btn'; saveBtn.type='button'; saveBtn.textContent='Salvar';
+    async function resolvePontosWithServerIds(rawPontos) {
+      const allApps = await getApps();
+      return rawPontos.map(p => {
+        const appObj = allApps.find(a => a.id === p.appId);
+        return { ...p, servidorId: appObj ? appObj.servidorId : null };
+      });
+    }
+
+    // update indicators per servidor and perform inline validation messages
+    async function updateIndicatorsAndValidation() {
+      const selectedServers = getSelectedServers();
+      serversIndicators.innerHTML = '';
+      // if no servers, show warning if pontos exist
+      const rawPontos = readPontosFromUI();
+      const pontos = await resolvePontosWithServerIds(rawPontos);
+
+      // build sums
+      const sums = {};
+      selectedServers.forEach(s => sums[s] = 0);
+      pontos.forEach(p => {
+        if (!p.servidorId) return;
+        if (!sums.hasOwnProperty(p.servidorId)) sums[p.servidorId] = 0;
+        sums[p.servidorId] += Number(p.conexoesSimultaneas || 0);
+      });
+
+      const telasVal = Number(telasInput.value || 0);
+
+      // render indicator per selected server
+      selectedServers.forEach(srvId => {
+        const sum = sums[srvId] || 0;
+        const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.gap='8px';
+        const left = document.createElement('div'); left.textContent = `Servidor ${srvId}`;
+        const right = document.createElement('div');
+        if (sum === telasVal) {
+          right.innerHTML = `<span class="ok">Conexões: ${sum}/${telasVal} — ok</span>`;
+        } else if (sum < telasVal) {
+          right.innerHTML = `<span class="warn">Conexões: ${sum}/${telasVal} — faltam ${telasVal - sum}</span>`;
+        } else {
+          right.innerHTML = `<span class="error">Conexões: ${sum}/${telasVal} — excede ${sum - telasVal}</span>`;
+        }
+        row.appendChild(left); row.appendChild(right);
+        serversIndicators.appendChild(row);
+      });
+
+      // overall validation: every selected server must have sum === telasVal
+      const validation = validateConnectionsPerServer({ servidores: selectedServers, pontosDeAcesso: pontos, telas: telasVal });
+      if (!selectedServers.length && pontos.length) {
+        messageBox.innerHTML = `<div class="error">Selecione pelo menos um servidor antes de adicionar pontos de acesso.</div>`;
+      } else if (!validation.ok) {
+        const bad = validation.details.filter(d => d.sum !== d.expected);
+        const msgs = bad.map(d => `${d.servidorId}: ${d.sum}/${d.expected}`).join('; ');
+        messageBox.innerHTML = `<div class="error">Validação por servidor falhou: ${msgs}</div>`;
+      } else {
+        messageBox.innerHTML = `<div class="success">Validação por servidor OK</div>`;
+      }
+    }
+
+    // save handler
+    const saveBtn = document.createElement('button'); saveBtn.className = 'btn'; saveBtn.type='button'; saveBtn.textContent = 'Salvar';
     saveBtn.addEventListener('click', async () => {
-      // basic validations
-      if (!nomeInput.value.trim()) return alert('Nome obrigatório');
-      // collect servidores
-      const selectedServers = Array.from(serversList.querySelectorAll('input[type=checkbox]:checked')).map(i=>i.value);
-      if (selectedServers.length > 2) return alert('Máximo 2 servidores');
-      // plan
+      // basic required fields
+      if (!nomeInput.value.trim()) {
+        messageBox.innerHTML = `<div class="error">Nome obrigatório</div>`; return;
+      }
+      const selectedServers = getSelectedServers();
+      if (selectedServers.length === 0) {
+        messageBox.innerHTML = `<div class="error">Selecione ao menos 1 servidor</div>`; return;
+      }
       const planId = planSelect.value || null;
-      // telas & preco & validade
       const telasVal = Number(telasInput.value || 0);
       const precoVal = Number(precoInput.value || 0);
       const validadeVal = validadeInput.value || null;
 
-      // collect telasPorServidor if any
-      const telasPorServidor = {};
-      const telaInputs = Array.from(telasPorSrvContainer.querySelectorAll('input[data-srv]'));
-      telaInputs.forEach(inp => {
-        telasPorServidor[inp.dataset.srv] = Number(inp.value || 0);
-      });
+      // collect pontos and resolve servidorId
+      const rawPontos = readPontosFromUI();
+      const pontos = await resolvePontosWithServerIds(rawPontos);
 
-      // collect pontos from UI and resolve servidorId based on selected app
-      const pontosCards = Array.from(pontosContainer.children);
-      const allApps = await getApps();
-      const pontos = pontosCards.map(card => {
-        const sel = card.querySelector('select');
-        const appId = sel ? sel.value : '';
-        const usuario = card.querySelector('input[type="text"]') ? card.querySelector('input[type="text"]').value : '';
-        const passInputs = card.querySelectorAll('input[type="text"]');
-        const senha = passInputs && passInputs[1] ? passInputs[1].value : '';
-        const conexInput = card.querySelector('input[type="number"]');
-        const conex = conexInput ? Number(conexInput.value||0) : 0;
-        const appObj = allApps.find(a=>a.id === appId);
-        const servidorId = appObj ? appObj.servidorId : null;
-        return { appId, servidorId, usuario, senha, conexoesSimultaneas: conex };
-      });
-
-      // enforce pontos rules: for each ponto if app.multiplosAcessos === false => conexoesSimultaneas must be 1
-      const appsMap = (await getApps()).reduce((acc,a)=>{acc[a.id]=a;return acc;},{});
+      // validations per ponto: app must be valid, conexoesSimultaneas obey multiplosAcessos
+      const appsMap = (await getApps()).reduce((acc,a) => { acc[a.id] = a; return acc; }, {});
       for (const p of pontos) {
-        const appObj = appsMap[p.appId];
-        if (!appObj) return alert('Selecione app válido para cada ponto');
-        if (!appObj.multiplosAcessos && Number(p.conexoesSimultaneas) !== 1) return alert(`App ${appObj.nome} não permite múltiplos acessos; conexões deve ser 1`);
-        if (appObj.multiplosAcessos) {
-          // validate max per server
-          const max = selectedServers.length > 1 ? (telasPorServidor[p.servidorId] || 0) : telasVal;
-          if (Number(p.conexoesSimultaneas) < 1 || Number(p.conexoesSimultaneas) > max) return alert(`Conexões para app ${appObj.nome} deve estar entre 1 e ${max}`);
+        const app = appsMap[p.appId];
+        if (!app) { messageBox.innerHTML = `<div class="error">Selecione um app válido em todos os pontos</div>`; return; }
+        if (!selectedServers.includes(app.servidorId)) {
+          messageBox.innerHTML = `<div class="error">App ${app.nome} pertence ao servidor ${app.servidorId} não selecionado</div>`; return;
+        }
+        if (!app.multiplosAcessos && Number(p.conexoesSimultaneas) !== 1) {
+          messageBox.innerHTML = `<div class="error">App ${app.nome} não permite múltiplos acessos; conexões deve ser 1</div>`; return;
+        }
+        if (app.multiplosAcessos) {
+          if (Number(p.conexoesSimultaneas) < 1 || Number(p.conexoesSimultaneas) > telasVal) {
+            messageBox.innerHTML = `<div class="error">Conexões para ${app.nome} deve estar entre 1 e ${telasVal}</div>`; return;
+          }
         }
       }
 
-      // validate soma por servidor
-      const sumBySrv = {};
-      pontos.forEach(p => { sumBySrv[p.servidorId] = (sumBySrv[p.servidorId]||0) + Number(p.conexoesSimultaneas||0); });
-      if (selectedServers.length > 1) {
-        // require telasPorServidor provided
-        if (Object.keys(telasPorServidor).length === 0) return alert('Informe telas por servidor');
-        for (const srvId of selectedServers) {
-          const allowed = Number(telasPorServidor[srvId]||0);
-          const sum = Number(sumBySrv[srvId]||0);
-          if (sum !== allowed) return alert(`Soma de conexões no servidor ${srvId} (${sum}) deve igualar telas (${allowed})`);
-        }
-      } else if (selectedServers.length === 1) {
-        const srvId = selectedServers[0];
-        const allowed = telasVal;
-        const sum = Number(sumBySrv[srvId]||0);
-        if (sum !== allowed) return alert(`Soma de conexões (${sum}) deve igualar telas (${allowed}) para o servidor ${srvId}`);
+      // final validation: soma por servidor == telasVal
+      const finalV = validateConnectionsPerServer({ servidores: selectedServers, pontosDeAcesso: pontos, telas: telasVal });
+      if (!finalV.ok) {
+        const bad = finalV.details.filter(d => d.sum !== d.expected);
+        const msgs = bad.map(d => `${d.servidorId}: ${d.sum}/${d.expected}`).join('; ');
+        messageBox.innerHTML = `<div class="error">Validação por servidor falhou: ${msgs}</div>`; return;
       }
 
-      // create payload
+      // payload assembly (persistência)
       const payload = {
         nome: nomeInput.value.trim(),
         phone: phoneInput.value.trim(),
@@ -451,33 +457,42 @@ export async function mountClientsView(root, { session } = {}) {
         telas: telasVal,
         preco: precoVal,
         validade: validadeVal,
-        pontosDeAcesso: pontos,
-        telasPorServidor: telasPorServidor
+        pontosDeAcesso: pontos
       };
 
-      // feedback if preco/telas different from plan
+      // feedback se preco/telas divergem do plano
       if (planId) {
         const plan = (await getPlans()).find(p => p.id === planId);
         if (plan) {
-          if (Number(plan.preco) !== Number(precoVal)) alert(`Atenção: preço editado difere do preço do plano (${plan.preco})`);
-          if (Number(plan.telas) !== Number(telasVal)) alert(`Atenção: número de telas difere do plano (${plan.telas})`);
+          if (Number(plan.preco) !== precoVal) {
+            messageBox.innerHTML = `<div class="warn">Preço salvo difere do preço do plano (${plan.preco})</div>`;
+          }
+          if (Number(plan.telas) !== telasVal) {
+            messageBox.innerHTML = `<div class="warn">Telas salvas difere do plano (${plan.telas})</div>`;
+          }
         }
       }
 
       ctx.resolve(payload);
     });
 
-    const cancel = document.createElement('button'); cancel.className='btn ghost'; cancel.type='button'; cancel.textContent='Cancelar';
-    cancel.addEventListener('click', ()=> ctx.cancel());
+    const cancelBtn = document.createElement('button'); cancelBtn.className = 'btn ghost'; cancelBtn.type='button'; cancelBtn.textContent = 'Cancelar';
+    cancelBtn.addEventListener('click', () => ctx.cancel());
 
-    form.appendChild(saveBtn ? saveBtn : saveBtn); // placeholder
-    form.appendChild(saveBtn);
-    form.appendChild(cancel);
-
-    // append form to container
+    form.appendChild(saveBtn); form.appendChild(cancelBtn);
     container.appendChild(form);
+
+    // observe changes in pontosContainer to update indicators in realtime
+    const obs = new MutationObserver(() => updateIndicatorsAndValidation());
+    obs.observe(pontosContainer, { childList: true, subtree: true });
+
+    // small intervalic check for inputs (handles manual edits)
+    const intervalId = setInterval(updateIndicatorsAndValidation, 400);
+    // cleanup when modal closes: ctx is expected to return a promise resolving/canceling; we can't detect that here.
+    // The modal implementation should call ctx.cancel/ctx.resolve and then remove the DOM; interval will stop when modal removed.
   }
 
-  await load();
+  // mount
+  load();
   root.appendChild(container);
 }
