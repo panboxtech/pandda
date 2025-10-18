@@ -1,5 +1,7 @@
 // js/views/clients.js
-// View de Clientes com filtros corrigidos (cada botão tem listener individual, mesma lógica do toggle)
+// View de Clientes com logs temporários para depuração dos filtros
+// - Mantive integração com clientForm
+// - Logs adicionados nos handlers de filtro, toggle "Não notificados" e no ciclo de load/render
 import {
   getClients,
   createClient,
@@ -86,8 +88,9 @@ export async function mountClientsView(root) {
     b.dataset.filter = f.key;
     b.setAttribute('aria-pressed', f.key === 'todos' ? 'true' : 'false');
     if (f.key === 'todos') b.classList.add('active');
-    // listener individual (mesma lógica do toggle)
-    b.addEventListener('click', () => {
+    // listener individual (mesma lógica do toggle) com logs
+    b.addEventListener('click', (ev) => {
+      console.log('[filters] click event:', { filterKey: f.key, text: f.label, eventTarget: ev.target, currentTarget: ev.currentTarget });
       // desativar todas
       filterButtons.forEach(btn => {
         btn.classList.remove('active');
@@ -99,6 +102,7 @@ export async function mountClientsView(root) {
       // atualizar estado e recarregar
       currentFilter = f.key;
       currentPage = 1;
+      console.log('[filters] applying filter:', currentFilter);
       loadAndRender();
     });
     filterButtons.push(b);
@@ -202,6 +206,7 @@ export async function mountClientsView(root) {
 
   // Carregar e renderizar
   async function loadAndRender() {
+    console.log('[loadAndRender] start', { currentFilter, currentNotNotified, currentSearch, currentSort, currentPage, currentPageSize });
     feedback.textContent = 'Carregando...';
     try {
       const resp = await getClients({
@@ -226,8 +231,11 @@ export async function mountClientsView(root) {
 
       notifiedToggle.setAttribute('aria-checked', String(currentNotNotified));
       notifiedToggle.classList.toggle('active', currentNotNotified);
+
+      console.log('[loadAndRender] done', { returned: resp.items?.length || 0, totalItems });
     } catch (err) {
       feedback.textContent = 'Erro ao carregar clientes: ' + (err?.message || String(err));
+      console.error('[loadAndRender] error', err);
     }
   }
 
@@ -243,32 +251,38 @@ export async function mountClientsView(root) {
   searchInput.addEventListener('input', debounce(() => {
     currentSearch = searchInput.value.trim();
     currentPage = 1;
+    console.log('[search] value', currentSearch);
     loadAndRender();
   }, 300));
 
   sortSelect.addEventListener('change', () => {
     currentSort = sortSelect.value;
     currentPage = 1;
+    console.log('[sort] value', currentSort);
     loadAndRender();
   });
 
   pageSizeSelect.addEventListener('change', () => {
     currentPageSize = Number(pageSizeSelect.value) || 12;
     currentPage = 1;
+    console.log('[pageSize] value', currentPageSize);
     loadAndRender();
   });
 
+  // Notified toggle with logs
   notifiedToggle.addEventListener('click', () => {
     currentNotNotified = !currentNotNotified;
     notifiedToggle.setAttribute('aria-checked', String(currentNotNotified));
     notifiedToggle.classList.toggle('active', currentNotNotified);
     currentPage = 1;
+    console.log('[notifiedToggle] toggled, currentNotNotified=', currentNotNotified);
     loadAndRender();
   });
 
   prevBtn.addEventListener('click', () => {
     if (currentPage > 1) {
       currentPage--;
+      console.log('[pagination] prev, page=', currentPage);
       loadAndRender();
     }
   });
@@ -276,6 +290,7 @@ export async function mountClientsView(root) {
   nextBtn.addEventListener('click', () => {
     if (currentPage < totalPages) {
       currentPage++;
+      console.log('[pagination] next, page=', currentPage);
       loadAndRender();
     }
   });
@@ -284,38 +299,47 @@ export async function mountClientsView(root) {
     const v = Math.max(1, Math.min(totalPages, Number(pageInput.value) || 1));
     if (v !== currentPage) {
       currentPage = v;
+      console.log('[pagination] goto, page=', currentPage);
       loadAndRender();
     }
   });
 
-  // CRUD: criar / editar
+  // CRUD: criar / editar (com logs)
   btnAdd.addEventListener('click', () => {
+    console.log('[btnAdd] abrir modal novo cliente');
     openFormModal({
       title: 'Novo cliente',
       renderForm: (container, ctx) => renderClientForm(container, ctx, null),
       onConfirm: async (data) => {
+        console.log('[createClient] payload', data);
         await createClient(data);
         await loadAndRender();
       }
-    }).catch(() => {});
+    }).catch((err) => { console.warn('[btnAdd] modal closed/rejected', err); });
   });
 
   async function openEdit(id) {
+    console.log('[openEdit] id', id);
     const resp = await getClients({ page: 1, pageSize: 1000 });
     const item = resp.items.find(x => x.id === id);
-    if (!item) return;
+    if (!item) {
+      console.warn('[openEdit] item not found', id);
+      return;
+    }
 
     openFormModal({
       title: 'Editar cliente',
       renderForm: (container, ctx) => renderClientForm(container, ctx, item),
       onConfirm: async (data) => {
+        console.log('[updateClient] id, payload', id, data);
         await updateClient(id, data);
         await loadAndRender();
       }
-    }).catch(() => {});
+    }).catch((err) => { console.warn('[openEdit] modal closed/rejected', err); });
   }
 
   // Inicial
+  console.log('[mountClientsView] initializing view');
   await loadAndRender();
   root.appendChild(container);
 }
