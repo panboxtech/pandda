@@ -1,6 +1,6 @@
 // js/views/clients.js
 // Implementa toolbar com busca, ordenação; filtros com estado ativo; paginação.
-// Importante: usa a nova assinatura de getClients({ page, pageSize, filter, search, sort })
+// Inclui toggle global "Não notificados" que funciona em conjunto com os filtros.
 import { getClients, createClient, updateClient } from '../mockData.js';
 import { openFormModal } from '../modal.js';
 import { getSession } from '../auth.js';
@@ -59,12 +59,15 @@ export async function mountClientsView(root, { session } = {}) {
   [10, 25, 50, 100].forEach(n => {
     const o = document.createElement('option'); o.value = String(n); o.textContent = `${n} por página`; pageSizeSelect.appendChild(o);
   });
-  pageSizeSelect.value = '12'; // padrão visual; mockData usa 12 por default
+  pageSizeSelect.value = '12'; // visual; mockData default 12
   toolbar.appendChild(pageSizeSelect);
 
   container.appendChild(toolbar);
 
-  // Filters (com toggle visual active)
+  // Filters (com toggle visual active) + toggle "Não notificados"
+  const filtersWrap = document.createElement('div');
+  filtersWrap.className = 'filters-wrap';
+
   const filters = document.createElement('div');
   filters.className = 'client-filters';
   const filterDefs = [
@@ -72,7 +75,6 @@ export async function mountClientsView(root, { session } = {}) {
     { key: 'vencendo', label: 'Vencendo (≤3d)' },
     { key: 'vencidos_30_less', label: 'Vencidos <30d' },
     { key: 'vencidos_30_plus', label: 'Vencidos ≥30d' },
-    { key: 'notificados', label: 'Notificados' },
     { key: 'bloqueados', label: 'Bloqueados' }
   ];
   filterDefs.forEach(f => {
@@ -83,7 +85,19 @@ export async function mountClientsView(root, { session } = {}) {
     if (f.key === 'todos') b.classList.add('active');
     filters.appendChild(b);
   });
-  container.appendChild(filters);
+
+  // Toggle button for "Não notificados" (works as independent checkbox-style filter)
+  const notifiedToggle = document.createElement('button');
+  notifiedToggle.className = 'filter-toggle';
+  notifiedToggle.setAttribute('role', 'checkbox');
+  notifiedToggle.setAttribute('aria-checked', 'false');
+  notifiedToggle.title = 'Mostrar apenas clientes não notificados';
+  notifiedToggle.type = 'button';
+  notifiedToggle.innerHTML = '🔕 Não notificados';
+
+  filtersWrap.appendChild(filters);
+  filtersWrap.appendChild(notifiedToggle);
+  container.appendChild(filtersWrap);
 
   // List + pagination area
   const list = document.createElement('div'); list.className = 'list';
@@ -116,6 +130,7 @@ export async function mountClientsView(root, { session } = {}) {
   let currentPageSize = 12;
   let currentSearch = '';
   let currentSort = 'dueDate';
+  let currentNotNotified = false; // quando true, filtra notified === false
   let totalItems = 0;
   let totalPages = 1;
 
@@ -164,7 +179,8 @@ export async function mountClientsView(root, { session } = {}) {
         pageSize: currentPageSize,
         filter: currentFilter,
         search: currentSearch,
-        sort: currentSort
+        sort: currentSort,
+        notNotified: currentNotNotified
       });
       totalItems = resp.total || 0;
       totalPages = Math.max(1, Math.ceil(totalItems / currentPageSize));
@@ -175,6 +191,9 @@ export async function mountClientsView(root, { session } = {}) {
       prevBtn.disabled = currentPage <= 1;
       nextBtn.disabled = currentPage >= totalPages;
       pageInput.value = currentPage;
+      // atualizar estado visual do toggle (caso external changes)
+      notifiedToggle.setAttribute('aria-checked', String(currentNotNotified));
+      notifiedToggle.classList.toggle('active', currentNotNotified);
     } catch (err) {
       feedback.textContent = 'Erro ao carregar clientes: ' + err.message;
     }
@@ -199,7 +218,7 @@ export async function mountClientsView(root, { session } = {}) {
     loadAndRender();
   });
 
-  // filtros: toggles que setam active visual e atualizam filtro
+  // filtros: toggles que setam active visual e atualizam filtro (status)
   filters.addEventListener('click', (e) => {
     if (!(e.target instanceof HTMLElement)) return;
     const f = e.target.dataset.filter;
@@ -208,6 +227,15 @@ export async function mountClientsView(root, { session } = {}) {
     filters.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
     e.target.classList.add('active');
     currentFilter = f;
+    currentPage = 1;
+    loadAndRender();
+  });
+
+  // toggle "Não notificados" (aplica em conjunto com status)
+  notifiedToggle.addEventListener('click', () => {
+    currentNotNotified = !currentNotNotified;
+    notifiedToggle.setAttribute('aria-checked', String(currentNotNotified));
+    notifiedToggle.classList.toggle('active', currentNotNotified);
     currentPage = 1;
     loadAndRender();
   });
@@ -232,7 +260,7 @@ export async function mountClientsView(root, { session } = {}) {
       onConfirm: async (data) => {
         if (!data.name) throw new Error('Nome obrigatório');
         await createClient(data);
-        // após criar, recarregar mantendo página (ou ir para primeira)
+        // após criar, recarregar na primeira página
         currentPage = 1;
         await loadAndRender();
       }
@@ -262,11 +290,8 @@ export async function mountClientsView(root, { session } = {}) {
         okBtn.className = 'btn';
         okBtn.textContent = 'Excluir';
         okBtn.addEventListener('click', async () => {
-          // Para este protótipo, exclusão deve ser feita por master; aqui assume que chamada removerá
-          // Caso use Supabase, chame delete via supabase.from('clients').delete().eq('id', id)
-          // Aqui apenas fecha modal e recarrega (mock mantém deleteClient se quiser integrar)
           try {
-            // preferimos marcar como blocked antes de excluir para segurança, mas mantemos comportamento
+            // por segurança, marcar como blocked antes de remover em protótipo
             await updateClient(id, { blocked: true });
             ctx.resolve(true);
             await loadAndRender();
