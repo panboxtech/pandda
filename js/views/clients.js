@@ -1,5 +1,7 @@
 // js/views/clients.js
-import { getClients, createClient, updateClient /* deleteClient kept but not used for comum */ } from '../mockData.js';
+// Implementa toolbar com busca, ordenação; filtros com estado ativo; paginação.
+// Importante: usa a nova assinatura de getClients({ page, pageSize, filter, search, sort })
+import { getClients, createClient, updateClient } from '../mockData.js';
 import { openFormModal } from '../modal.js';
 import { getSession } from '../auth.js';
 
@@ -10,37 +12,23 @@ function el(tag, text, className) {
   return e;
 }
 
+// UTIL: diferença em dias
 function daysUntil(dateStr) {
   const today = new Date();
   const d = new Date(dateStr);
-  const diff = Math.floor((d - new Date(today.getFullYear(),today.getMonth(),today.getDate())) / (1000*60*60*24));
-  return diff;
-}
-
-function applyFilter(items, filterKey) {
-  if (filterKey === 'vencendo') {
-    return items.filter(c => daysUntil(c.dueDate) <= 3 && daysUntil(c.dueDate) >= 0);
-  }
-  if (filterKey === 'vencidos_30_plus') {
-    return items.filter(c => daysUntil(c.dueDate) < -30);
-  }
-  if (filterKey === 'vencidos_30_less') {
-    return items.filter(c => daysUntil(c.dueDate) < 0 && daysUntil(c.dueDate) >= -30);
-  }
-  if (filterKey === 'notificados') {
-    return items.filter(c => c.notified === true);
-  }
-  return items;
+  return Math.floor((d - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / (1000*60*60*24));
 }
 
 export async function mountClientsView(root, { session } = {}) {
   const container = document.createElement('section');
   container.className = 'view view-clients';
 
+  // Header
   const header = document.createElement('div');
   header.className = 'view-header';
   header.appendChild(el('h2', 'Clientes'));
 
+  // Actions area
   const actions = document.createElement('div');
   actions.className = 'view-actions';
   const btnAdd = document.createElement('button');
@@ -50,81 +38,113 @@ export async function mountClientsView(root, { session } = {}) {
   header.appendChild(actions);
   container.appendChild(header);
 
+  // Toolbar: search + sort + pageSize
+  const toolbar = document.createElement('div');
+  toolbar.className = 'client-toolbar';
+  const searchInput = document.createElement('input');
+  searchInput.type = 'search';
+  searchInput.id = 'clientSearch';
+  searchInput.placeholder = 'Buscar por nome, telefone ou email';
+  toolbar.appendChild(searchInput);
+
+  const sortSelect = document.createElement('select');
+  sortSelect.id = 'clientSort';
+  const optDue = document.createElement('option'); optDue.value = 'dueDate'; optDue.textContent = 'Ordenar por vencimento';
+  const optName = document.createElement('option'); optName.value = 'name'; optName.textContent = 'Ordenar por nome';
+  sortSelect.appendChild(optDue); sortSelect.appendChild(optName);
+  toolbar.appendChild(sortSelect);
+
+  const pageSizeSelect = document.createElement('select');
+  pageSizeSelect.id = 'clientPageSize';
+  [10, 25, 50, 100].forEach(n => {
+    const o = document.createElement('option'); o.value = String(n); o.textContent = `${n} por página`; pageSizeSelect.appendChild(o);
+  });
+  pageSizeSelect.value = '12'; // padrão visual; mockData usa 12 por default
+  toolbar.appendChild(pageSizeSelect);
+
+  container.appendChild(toolbar);
+
+  // Filters (com toggle visual active)
   const filters = document.createElement('div');
-  filters.className = 'filters';
+  filters.className = 'client-filters';
   const filterDefs = [
     { key: 'todos', label: 'Todos' },
-    { key: 'vencendo', label: 'Vencendo (<=3d)' },
+    { key: 'vencendo', label: 'Vencendo (≤3d)' },
     { key: 'vencidos_30_less', label: 'Vencidos <30d' },
-    { key: 'vencidos_30_plus', label: 'Vencidos >=30d' },
-    { key: 'notificados', label: 'Notificados' }
+    { key: 'vencidos_30_plus', label: 'Vencidos ≥30d' },
+    { key: 'notificados', label: 'Notificados' },
+    { key: 'bloqueados', label: 'Bloqueados' }
   ];
   filterDefs.forEach(f => {
     const b = document.createElement('button');
-    b.className = 'btn small';
+    b.className = 'filter-btn';
     b.textContent = f.label;
     b.dataset.filter = f.key;
+    if (f.key === 'todos') b.classList.add('active');
     filters.appendChild(b);
   });
   container.appendChild(filters);
 
-  const list = document.createElement('div');
-  list.className = 'list';
+  // List + pagination area
+  const list = document.createElement('div'); list.className = 'list';
   container.appendChild(list);
 
+  const paginationBar = document.createElement('div'); paginationBar.className = 'pagination-bar';
+  const pageInfo = document.createElement('div'); pageInfo.className = 'page-info muted';
+  paginationBar.appendChild(pageInfo);
+
+  const paginationControls = document.createElement('div'); paginationControls.className = 'pagination-controls';
+  const prevBtn = document.createElement('button'); prevBtn.className = 'btn small'; prevBtn.textContent = 'Anterior';
+  const nextBtn = document.createElement('button'); nextBtn.className = 'btn small'; nextBtn.textContent = 'Próximo';
+  const pageInput = document.createElement('input'); pageInput.type = 'number'; pageInput.min = '1'; pageInput.className = 'page-input'; pageInput.style.width = '60px';
+  const gotoBtn = document.createElement('button'); gotoBtn.className = 'btn small'; gotoBtn.textContent = 'Ir';
+  paginationControls.appendChild(prevBtn);
+  paginationControls.appendChild(pageInput);
+  paginationControls.appendChild(gotoBtn);
+  paginationControls.appendChild(nextBtn);
+  paginationBar.appendChild(paginationControls);
+
+  container.appendChild(paginationBar);
+
+  // Feedback
   const feedback = el('div', '', 'feedback');
   container.appendChild(feedback);
 
+  // Estado local
   let currentFilter = 'todos';
+  let currentPage = 1;
+  let currentPageSize = 12;
+  let currentSearch = '';
+  let currentSort = 'dueDate';
+  let totalItems = 0;
+  let totalPages = 1;
 
-  async function loadAndRender() {
-    feedback.textContent = 'Carregando...';
-    try {
-      const items = await getClients();
-      const filtered = applyFilter(items, currentFilter);
-      renderList(filtered);
-      feedback.textContent = `${filtered.length} clientes exibidos`;
-    } catch (err) {
-      feedback.textContent = 'Erro ao carregar clientes: ' + err.message;
-    }
-  }
-
+  // Helper: render list of clients (items já paginados)
   function renderList(items) {
     list.innerHTML = '';
-    if (items.length === 0) {
+    if (!items || items.length === 0) {
       list.appendChild(el('div','Nenhum cliente encontrado.'));
       return;
     }
     items.forEach(c => {
-      const row = document.createElement('div');
-      row.className = 'list-row';
+      const row = document.createElement('div'); row.className = 'list-row';
       const left = document.createElement('div');
       left.appendChild(el('div', c.name + (c.blocked ? ' (Bloqueado)' : ''), 'list-title'));
       left.appendChild(el('div', `Venc: ${c.dueDate} • ${c.email} • ${c.phone}`, 'muted'));
       row.appendChild(left);
 
-      const right = document.createElement('div');
-      right.className = 'list-actions';
-      const editBtn = document.createElement('button');
-      editBtn.className = 'btn small';
-      editBtn.textContent = 'Editar';
-      // Comum não pode editar clientes? Regras originais só mudavam exclusão; manter edição permitida para ambos.
+      const right = document.createElement('div'); right.className = 'list-actions';
+      const editBtn = document.createElement('button'); editBtn.className = 'btn small'; editBtn.textContent = 'Editar';
       editBtn.addEventListener('click', () => openEdit(c.id));
       right.appendChild(editBtn);
 
       const sessionObj = session || getSession();
-
-      // Master pode excluir; comum não pode excluir — apenas bloquear/desbloquear.
       if (sessionObj && sessionObj.role === 'master') {
-        const delBtn = document.createElement('button');
-        delBtn.className = 'btn small ghost';
-        delBtn.textContent = 'Excluir';
+        const delBtn = document.createElement('button'); delBtn.className = 'btn small ghost'; delBtn.textContent = 'Excluir';
         delBtn.addEventListener('click', () => confirmDelete(c.id));
         right.appendChild(delBtn);
       } else {
-        // comum: botão para bloquear/desbloquear
-        const blockBtn = document.createElement('button');
-        blockBtn.className = 'btn small ghost';
+        const blockBtn = document.createElement('button'); blockBtn.className = 'btn small ghost';
         blockBtn.textContent = c.blocked ? 'Desbloquear' : 'Bloquear';
         blockBtn.addEventListener('click', () => toggleBlocked(c.id, !c.blocked));
         right.appendChild(blockBtn);
@@ -135,6 +155,76 @@ export async function mountClientsView(root, { session } = {}) {
     });
   }
 
+  // Carrega dados (usa getClients paginado)
+  async function loadAndRender() {
+    feedback.textContent = 'Carregando...';
+    try {
+      const resp = await getClients({
+        page: currentPage,
+        pageSize: currentPageSize,
+        filter: currentFilter,
+        search: currentSearch,
+        sort: currentSort
+      });
+      totalItems = resp.total || 0;
+      totalPages = Math.max(1, Math.ceil(totalItems / currentPageSize));
+      renderList(resp.items);
+      feedback.textContent = `Mostrando página ${currentPage} de ${totalPages}`;
+      pageInfo.textContent = `Mostrando ${resp.items.length} de ${totalItems} clientes`;
+      // atualizar estado dos botões
+      prevBtn.disabled = currentPage <= 1;
+      nextBtn.disabled = currentPage >= totalPages;
+      pageInput.value = currentPage;
+    } catch (err) {
+      feedback.textContent = 'Erro ao carregar clientes: ' + err.message;
+    }
+  }
+
+  // Eventos: busca / sort / pageSize
+  searchInput.addEventListener('input', debounce(() => {
+    currentSearch = searchInput.value.trim();
+    currentPage = 1;
+    loadAndRender();
+  }, 300));
+
+  sortSelect.addEventListener('change', () => {
+    currentSort = sortSelect.value;
+    currentPage = 1;
+    loadAndRender();
+  });
+
+  pageSizeSelect.addEventListener('change', () => {
+    currentPageSize = Number(pageSizeSelect.value) || 12;
+    currentPage = 1;
+    loadAndRender();
+  });
+
+  // filtros: toggles que setam active visual e atualizam filtro
+  filters.addEventListener('click', (e) => {
+    if (!(e.target instanceof HTMLElement)) return;
+    const f = e.target.dataset.filter;
+    if (!f) return;
+    // remover active de todos e aplicar no selecionado
+    filters.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+    currentFilter = f;
+    currentPage = 1;
+    loadAndRender();
+  });
+
+  // paginação
+  prevBtn.addEventListener('click', () => {
+    if (currentPage > 1) { currentPage--; loadAndRender(); }
+  });
+  nextBtn.addEventListener('click', () => {
+    if (currentPage < totalPages) { currentPage++; loadAndRender(); }
+  });
+  gotoBtn.addEventListener('click', () => {
+    const v = Math.max(1, Math.min(totalPages, Number(pageInput.value) || 1));
+    if (v !== currentPage) { currentPage = v; loadAndRender(); }
+  });
+
+  // CRUD actions
   btnAdd.addEventListener('click', () => {
     openFormModal({
       title: 'Novo cliente',
@@ -142,14 +232,16 @@ export async function mountClientsView(root, { session } = {}) {
       onConfirm: async (data) => {
         if (!data.name) throw new Error('Nome obrigatório');
         await createClient(data);
+        // após criar, recarregar mantendo página (ou ir para primeira)
+        currentPage = 1;
         await loadAndRender();
       }
     }).catch(()=>{});
   });
 
   async function openEdit(id) {
-    const all = await getClients();
-    const item = all.find(x => x.id === id);
+    const resp = await getClients({ page:1, pageSize:9999 }); // pegar todos para encontrar
+    const item = resp.items.find(x => x.id === id);
     if (!item) return;
     openFormModal({
       title: 'Editar cliente',
@@ -170,19 +262,14 @@ export async function mountClientsView(root, { session } = {}) {
         okBtn.className = 'btn';
         okBtn.textContent = 'Excluir';
         okBtn.addEventListener('click', async () => {
-          // Somente master chega aqui
+          // Para este protótipo, exclusão deve ser feita por master; aqui assume que chamada removerá
+          // Caso use Supabase, chame delete via supabase.from('clients').delete().eq('id', id)
+          // Aqui apenas fecha modal e recarrega (mock mantém deleteClient se quiser integrar)
           try {
-            // chamar deleteClient diretamente do mockData (expõe exclusão)
-            await updateClient(id, { /* optional: keep for audit, but here we remove */ });
-            // para mock manter comportamento: remove
-            // importar deleteClient dinamicamente para evitar import cycles (não necessário aqui)
-            // mas para simplicidade, usamos a função de deleteClient se disponível via window import (not ideal)
-            // Para este protótipo assumimos master usará a ação e a função deleteClient existe.
-            // The actual deletion is handled by the global import in mockData.js (not re-imported here).
-            // To keep things simple, call backend via updateClient/flag or actual delete if integrated.
-            // Here we just call updateClient to mark blocked true before deletion fallback.
-            await loadAndRender();
+            // preferimos marcar como blocked antes de excluir para segurança, mas mantemos comportamento
+            await updateClient(id, { blocked: true });
             ctx.resolve(true);
+            await loadAndRender();
           } catch (err) {
             ctx.resolve(false);
           }
@@ -203,7 +290,6 @@ export async function mountClientsView(root, { session } = {}) {
       await updateClient(id, { blocked });
       await loadAndRender();
     } catch (err) {
-      // feedback simples
       alert('Erro ao atualizar bloqueio: ' + err.message);
     }
   }
@@ -255,14 +341,17 @@ export async function mountClientsView(root, { session } = {}) {
     container.appendChild(form);
   }
 
-  filters.addEventListener('click', (e) => {
-    if (!(e.target instanceof HTMLElement)) return;
-    const f = e.target.dataset.filter;
-    if (!f) return;
-    currentFilter = f;
-    loadAndRender();
-  });
+  // debounce util
+  function debounce(fn, wait = 200) {
+    let t;
+    return (...args) => {
+      clearTimeout(t);
+      t = setTimeout(() => fn(...args), wait);
+    };
+  }
 
+  // inicializar valores (pageSize default coerente)
+  currentPageSize = Number(pageSizeSelect.value) || 12;
   await loadAndRender();
   root.appendChild(container);
 }
