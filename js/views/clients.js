@@ -1,7 +1,5 @@
 // js/views/clients.js
-// View de Clientes com logs temporários para depuração dos filtros
-// - Mantive integração com clientForm
-// - Logs adicionados nos handlers de filtro, toggle "Não notificados" e no ciclo de load/render
+// Versão instrumentada para depuração de filtros (substituir temporariamente)
 import {
   getClients,
   createClient,
@@ -66,9 +64,16 @@ export async function mountClientsView(root) {
   // Filtros
   const filtersWrap = document.createElement('div');
   filtersWrap.className = 'filters-wrap';
+  // reforçar z-index e pointer-events para evitar overlays cobrirem os botões
+  filtersWrap.style.position = 'relative';
+  filtersWrap.style.zIndex = '80';
+  filtersWrap.style.pointerEvents = 'auto';
 
   const filters = document.createElement('div');
   filters.className = 'client-filters';
+  // garantir que a caixa de filtros aceite ponteiro
+  filters.style.pointerEvents = 'auto';
+  filters.style.zIndex = '81';
 
   const filterDefs = [
     { key: 'todos', label: 'Todos' },
@@ -88,9 +93,14 @@ export async function mountClientsView(root) {
     b.dataset.filter = f.key;
     b.setAttribute('aria-pressed', f.key === 'todos' ? 'true' : 'false');
     if (f.key === 'todos') b.classList.add('active');
-    // listener individual (mesma lógica do toggle) com logs
+
+    // garantir que o botão aceite clique (caso CSS esteja bloqueando)
+    b.style.pointerEvents = 'auto';
+    b.tabIndex = 0;
+
+    // listener individual (com logs)
     b.addEventListener('click', (ev) => {
-      console.log('[filters] click event:', { filterKey: f.key, text: f.label, eventTarget: ev.target, currentTarget: ev.currentTarget });
+      console.log('[filters] click event:', { filterKey: f.key, label: f.label, target: ev.target.tagName, currentTarget: ev.currentTarget.tagName });
       // desativar todas
       filterButtons.forEach(btn => {
         btn.classList.remove('active');
@@ -105,6 +115,7 @@ export async function mountClientsView(root) {
       console.log('[filters] applying filter:', currentFilter);
       loadAndRender();
     });
+
     filterButtons.push(b);
     filters.appendChild(b);
   });
@@ -115,6 +126,9 @@ export async function mountClientsView(root) {
   notifiedToggle.setAttribute('aria-checked', 'false');
   notifiedToggle.type = 'button';
   notifiedToggle.innerHTML = '🔕 Não notificados';
+  // same protection for toggle
+  notifiedToggle.style.pointerEvents = 'auto';
+  notifiedToggle.tabIndex = 0;
 
   filtersWrap.appendChild(filters);
   filtersWrap.appendChild(notifiedToggle);
@@ -239,7 +253,7 @@ export async function mountClientsView(root) {
     }
   }
 
-  // Eventos
+  // Events
   function debounce(fn, wait = 200) {
     let t;
     return (...args) => {
@@ -304,7 +318,7 @@ export async function mountClientsView(root) {
     }
   });
 
-  // CRUD: criar / editar (com logs)
+  // CRUD: criar / editar
   btnAdd.addEventListener('click', () => {
     console.log('[btnAdd] abrir modal novo cliente');
     openFormModal({
@@ -337,6 +351,15 @@ export async function mountClientsView(root) {
       }
     }).catch((err) => { console.warn('[openEdit] modal closed/rejected', err); });
   }
+
+  // DEBUG: global click logger to detect overlays intercepting events
+  function globalClickLogger(e) {
+    console.log('[global click] target:', e.target, 'path length:', (e.composedPath ? e.composedPath().length : 'n/a'));
+  }
+  document.addEventListener('click', globalClickLogger, true);
+  // register cleanup to remove this listener when view is destroyed (not implemented here)
+  // when done debugging, remove the listener:
+  // document.removeEventListener('click', globalClickLogger, true);
 
   // Inicial
   console.log('[mountClientsView] initializing view');
