@@ -4,19 +4,20 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Painel</title>
-  <!-- Nota: o carregamento do CSS base é feito em app.js -->
+  <meta name="description" content="Painel administrativo" />
 </head>
 <body>
-  <!-- Container principal da aplicação. app.js também criará automaticamente se faltar. -->
+  <!-- Container principal da aplicação. app.js criará automaticamente se não existir. -->
   <div id="app"></div>
 
-  <!-- Modal root compartilhado (opcional, mas recomendado se usar modais) -->
+  <!-- Modal root compartilhado usado pela aplicação -->
   <div class="modal-root" id="modal-root" aria-hidden="true" style="display:none">
     <div class="modal-overlay"></div>
     <div class="modal" role="dialog" aria-modal="true"></div>
   </div>
 
-  <!-- Bootstrap da aplicação -->
-  <script type="module" src="./app.js" defer></script>
+  <!-- Carrega o bootstrap da aplicação.
+       Caminho relativo ajustado para o app.js que está em ../js/app.js -->
+  <script type="module" src="../js/app.js" defer></script>
 </body>
 </html>
