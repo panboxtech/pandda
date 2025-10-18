@@ -1,0 +1,13 @@
+/* Form: Client */
+.entity-form{display:flex;flex-direction:column;gap:8px;padding:8px}
+.entity-form label{font-size:13px;color:var(--muted)}
+.entity-form input, .entity-form select{width:100%;padding:8px;border-radius:6px;border:1px solid rgba(0,0,0,0.06);background:transparent;color:var(--text)}
+.form-message .error{background:#fdecea;color:#b91c1c;padding:8px;border-radius:6px;margin-bottom:8px;border:1px solid rgba(185,28,28,0.12)}
+.form-message .warn{background:#fff7ed;color:#92400e;padding:8px;border-radius:6px;margin-bottom:8px;border:1px solid rgba(146,64,14,0.08)}
+.form-message .success{background:#ecfdf5;color:#065f46;padding:8px;border-radius:6px;margin-bottom:8px;border:1px solid rgba(6,95,70,0.08)}
+
+.servers-list{display:flex;gap:10px;flex-wrap:wrap}
+.servers-indicators{margin-top:6px;display:flex;flex-direction:column;gap:6px}
+.pontos-container{margin-top:6px}
+.ponto-card{padding:8px;border-radius:6px;border:1px solid rgba(0,0,0,0.06);background:transparent}
+.ponto-card label{font-size:13px;color:var(--muted);display:block;margin-top:6px}
